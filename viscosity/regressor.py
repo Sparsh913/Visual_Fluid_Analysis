@@ -194,7 +194,7 @@ def train_sequence_model(
                     "epoch": epoch,
                     "loss": running_loss / len(train_dataloader),
                 },
-                f"viscosity/new_data_11_24/sequence_model_epoch_cls_reg_{epoch+1}.pt",
+                f"viscosity/new_data_11_24/sequence_model_epoch_reg_{epoch+1}.pt",
             )
 
             # Test the model on the validation set
@@ -275,7 +275,7 @@ if __name__ == "__main__":
 
     # Model, Loss, and Optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SequenceViscosityClassifier(num_classes=3).to(device)
+    model = SequenceViscosityClassifier().to(device)
     criterion_cls = nn.CrossEntropyLoss()
     criterion_reg = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.07)

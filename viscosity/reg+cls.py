@@ -95,6 +95,8 @@ class SequenceViscosityClassifier(nn.Module):
         # Fully connected layers for classification
         self.fc1 = nn.Linear(cnn_feature_dim + velocity_dim, 128)
         self.fc2 = nn.Linear(128, num_classes)
+        # add a regression head as well
+        self.fc3 = nn.Linear(128, 1)
 
     def forward(self, masks, angular_velocity):
         # Flatten masks into batch of individual images
@@ -119,32 +121,65 @@ class SequenceViscosityClassifier(nn.Module):
         # Classification
         x = F.relu(self.fc1(combined_features))
         output_cls = self.fc2(x)  # Output logits for each class
+        
+        # Regression
+        x = F.relu(self.fc1(combined_features))
+        output_reg = self.fc3(x)
 
-        return output_cls
+        return output_cls, output_reg
 
 
 # Training Loop
 def train_sequence_model(
     model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, num_epochs=10, device="cpu", start_epoch=0
 ):
+    # Freeze CNN for the first 30 epochs
+    if start_epoch < 30:
+        print("Freezing CNN for the first 30 epochs...")
+        for param in model.cnn.parameters():
+            param.requires_grad = False
 
     for epoch in range(start_epoch, num_epochs):
         model.train()
         running_loss = 0.0
         total_cls_loss = 0.0
+        stop_cls = False  # Flag to stop optimizing classification head
 
-        for masks, velocities, labels, _ in train_dataloader:
+        # Unfreeze CNN after 30 epochs
+        if epoch == 30:
+            print("Unfreezing CNN after 30 epochs...")
+            for param in model.cnn.parameters():
+                param.requires_grad = True
+
+        for masks, velocities, labels, vis in train_dataloader:
             masks = masks.to(device)
             velocities = velocities.to(device)
             labels = labels.to(device)
+            vis = vis.to(device)
 
             # Zero the parameter gradients
             optimizer.zero_grad()
 
             # Forward pass
-            output_cls = model(masks, velocities)
-            loss = 10**3 * criterion_cls(output_cls, labels)
+            output_cls, output_reg = model(masks, velocities)
+            loss1 = criterion_cls(output_cls, labels)
+            loss2 = criterion_reg(output_reg, vis)
+
+            # Stop optimizing classification if loss < 0.001
+            if loss1.item() < 0.01:
+                stop_cls = True
+                print(f"Stopping classification head optimization at epoch {epoch + 1}")
+
+            cls_weight = 100  # Example weight
+            reg_weight = 1
+            if stop_cls:
+                loss = reg_weight * loss2  # Only optimize regression loss
+            else:
+                loss = cls_weight * loss1 + reg_weight * loss2
+
             wandb.log({
+                "training loss cls": loss1.item(),
+                "training loss reg": loss2.item(),
                 "total training loss": loss.item(),
             })
 
@@ -159,9 +194,11 @@ def train_sequence_model(
 
             # Track loss
             running_loss += loss.item()
-            total_cls_loss += loss.item()
+            total_cls_loss += loss1.item()
 
         print(f"Epoch [{epoch + 1}/{num_epochs}], Total Loss: {running_loss / len(train_dataloader):.4f}")
+        if stop_cls:
+            print(f"Classification head optimization stopped as loss reached {total_cls_loss / len(train_dataloader):.6f}")
 
         # Save the model checkpoint
         if (epoch + 1) % 10 == 0:
@@ -172,7 +209,7 @@ def train_sequence_model(
                     "epoch": epoch,
                     "loss": running_loss / len(train_dataloader),
                 },
-                f"viscosity/new_data_11_24/sequence_model_epoch_cls_{epoch+1}.pt",
+                f"viscosity/new_data_11_24/sequence_model_epoch_cls_reg_{epoch+1}.pt",
             )
 
             # Test the model on the validation set
@@ -180,36 +217,48 @@ def train_sequence_model(
             total = 0
             correct_cls = 0
             predictions_cls = []
+            predictions_reg = []
             ground_truths_cls = []
+            ground_truths_reg = []
             with torch.no_grad():
-                for masks, velocities, labels, _ in valid_dataloader:
+                for masks, velocities, labels, vis in valid_dataloader:
                     masks = masks.to(device)
                     velocities = velocities.to(device)
                     labels = labels.to(device)
+                    vis = vis.to(device)
 
                     # Forward pass
-                    output_cls = model(masks, velocities)
+                    output_cls, output_reg = model(masks, velocities)
                     _, predicted_cls = torch.max(output_cls, 1)
+                    predicted_reg = output_reg
 
                     # Log Validation Loss
-                    loss = criterion_cls(output_cls, labels)
+                    loss1 = criterion_cls(output_cls, labels)
+                    loss2 = criterion_reg(output_reg, vis)
                     wandb.log({
-                        "validation loss cls": loss.item(),
+                        "validation loss cls": loss1.item(),
+                        "validation loss reg": loss2.item(),
+                        "total validation loss": (loss1 + loss2).item(),
                     })
 
                     # Record predictions and ground truths
                     predictions_cls.extend(predicted_cls.cpu().numpy())
                     ground_truths_cls.extend(labels.cpu().numpy())
+                    predictions_reg.extend(predicted_reg.cpu().numpy())
+                    ground_truths_reg.extend(vis.cpu().numpy())
 
                     # Accuracy calculation
                     total += labels.size(0)
                     correct_cls += (predicted_cls == labels).sum().item()
+                    mse_reg = F.mse_loss(predicted_reg, vis, reduction="sum").item()
+                    wandb.log({"validation MSE reg": mse_reg})
 
             accuracy_cls = 100 * correct_cls / total
             print(f"Validation Accuracy cls: {accuracy_cls:.2f}%")
             print(f"Predictions cls: {predictions_cls}")
             print(f"Ground Truths cls: {ground_truths_cls}")
-
+            print(f"Predictions reg: {predictions_reg}")
+            print(f"Ground Truths reg: {ground_truths_reg}")
             model.train()
 
             
@@ -258,18 +307,15 @@ if __name__ == "__main__":
     model = SequenceViscosityClassifier(num_classes=3).to(device)
     criterion_cls = nn.CrossEntropyLoss()
     criterion_reg = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    # optimizer = optim.Adam(model.parameters(), lr=0.001)
     # set different lrs for cls and reg heads
-    # optimizer = optim.Adam([
-    #     {"params": model.cnn.parameters(), "lr": 0.001},
-    #     {"params": model.fc1.parameters()},
-    #     {"params": model.fc2.parameters()},
-    #     {"params": model.fc3.parameters(), "lr": 0.05},
-    #     {"params": model.velocity_embedding.parameters()}
-    # ], lr=0.001)
-    # freeze velocity embedding
-    for param in model.velocity_embedding.parameters():
-        param.requires_grad = False
+    optimizer = optim.Adam([
+        {"params": model.cnn.parameters(), "lr": 0.001},
+        {"params": model.fc1.parameters()},
+        {"params": model.fc2.parameters()},
+        {"params": model.fc3.parameters(), "lr": 0.05},
+        {"params": model.velocity_embedding.parameters()}
+    ], lr=0.001)
     
     if args.load_checkpoint:
         checkpoint = torch.load(args.load_checkpoint, map_location=device)
@@ -296,4 +342,4 @@ if __name__ == "__main__":
     wandb.watch(model, log="all")
 
     # Train the Model
-    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, num_epochs=200, device=device, start_epoch=start_epoch)
+    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, num_epochs=1000, device=device, start_epoch=start_epoch)
