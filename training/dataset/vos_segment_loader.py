@@ -107,13 +107,17 @@ class PalettisedPNGSegmentLoader:
         video_png_root: the folder contains all the masks stored in png
         """
         self.video_png_root = video_png_root
+        # print("video_png_root", video_png_root)
         # build a mapping from frame id to their PNG mask path
         # note that in some datasets, the PNG paths could have more
         # than 5 digits, e.g. "00000000.png" instead of "00000.png"
         png_filenames = os.listdir(self.video_png_root)
+        # print("png_filenames", png_filenames)
         self.frame_id_to_png_filename = {}
         for filename in png_filenames:
             frame_id, _ = os.path.splitext(filename)
+            # print("frame_id", frame_id)
+            # print("filename", filename)
             self.frame_id_to_png_filename[int(frame_id)] = filename
 
     def load(self, frame_id):

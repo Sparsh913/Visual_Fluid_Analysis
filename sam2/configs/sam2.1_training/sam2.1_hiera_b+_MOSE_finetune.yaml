@@ -13,9 +13,10 @@ scratch:
 
 dataset:
   # PATHS to Dataset
-  img_folder: /fsx-onevision/shared/data/academic_vos_data/MOSE/train/JPEGImages # PATH to MOSE JPEGImages folder
-  gt_folder: /fsx-onevision/shared/data/academic_vos_data/MOSE/train/Annotations/  # PATH to MOSE Annotations folder
-  file_list_txt: training/assets/MOSE_sample_train_list.txt # Optional PATH to filelist containing a subset of videos to be used for training
+  img_folder: /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/training/dataset/train/JPEGImages/ # PATH to MOSE JPEGImages folder
+  gt_folder: /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/training/dataset/train/Annotations/  # PATH to MOSE Annotations folder
+  # file_list_txt: training/assets/MOSE_sample_train_list.txt # Optional PATH to filelist containing a subset of videos to be used for training
+  file_list_txt: null
   multiplier: 2
 
 # Video transforms
@@ -323,7 +324,7 @@ trainer:
 
 launcher:
   num_nodes: 1
-  gpus_per_node: 8
+  gpus_per_node: 1
   experiment_log_dir: null # Path to log directory, defaults to ./sam2_logs/${config_name}
 
 # SLURM args if running on a cluster
@@ -331,7 +332,7 @@ submitit:
   partition: null
   account: null
   qos: null
-  cpus_per_task: 10
+  cpus_per_task: 5
   use_cluster: false
   timeout_hour: 24
   name: null

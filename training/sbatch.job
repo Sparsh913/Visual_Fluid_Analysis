@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH -N 1 # Number of nodes
+#SBATCH -n 10
+#SBATCH -p GPU-shared
+#SBATCH --gpus=v100-32:2 #GPU specification. H100
+#SBATCH -t 00-48:00 # Estimated time, 48hour max. DD-HH:MM.
+#SBATCH --job-name test
+#SBATCH -o job_%j.out
+#SBATCH -e job_%j.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=sparshg@andrew.cmu.edu
+# echo commands to stdout
+set -x
+EXE=/bin/bash
+source /ocean/projects/agr240001p/mqureshi/miniconda3/etc/profile.d/conda.sh
+conda activate sam2
+WORKING_DIR=/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2
+cd $WORKING_DIR
+export HYDRA_FULL_ERROR=1
+# sleep
+python training/train.py -c configs/sam2.1_training/sam2.1_hiera_t_liq_finetune.yaml --use-cluster 0 --num-gpus 2
