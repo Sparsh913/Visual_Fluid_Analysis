@@ -84,7 +84,7 @@ if __name__ == "__main__":
     ])
 
     # Test Configuration
-    checkpoint_path = "viscosity/new_data_11_24/sequence_model_epoch_cls_reg_760.pt"  # Replace with the actual path to your checkpoint
+    checkpoint_path = "viscosity/new_data_11_24/sequence_model_epoch_cls_10.pt"  # Replace with the actual path to your checkpoint
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Test the model

@@ -68,6 +68,9 @@ class SequenceViscosityDataset(Dataset):
 
         # Stack masks into a tensor of shape (max_seq_len, 1, H, W)
         masks = torch.stack(masks, dim=0)
+        vis_max = max(self.labels_dict_vis.values())
+        vis_min = min(self.labels_dict_vis.values())
+        viscosity = (viscosity - vis_min) / (vis_max - vis_min)
 
         return masks, torch.tensor(velocity, dtype=torch.float32), label, torch.tensor(viscosity, dtype=torch.float32)
 
@@ -95,10 +98,13 @@ class SequenceViscosityClassifier(nn.Module):
         # Fully connected layers for classification
         self.fc1 = nn.Linear(cnn_feature_dim + velocity_dim, 128)
         # add a regression head as well
-        self.reg_head = nn.ModuleList([
+        self.reg_head = nn.Sequential(
             nn.Linear(128, 64),
             nn.Linear(64, 1)
-        ])
+        )
+        self.dp = nn.Dropout(0.4)
+        self.layernorm = nn.LayerNorm(128)
+        
 
     def forward(self, masks, angular_velocity):
         # Flatten masks into batch of individual images
@@ -126,37 +132,27 @@ class SequenceViscosityClassifier(nn.Module):
         
         # Regression
         x = F.relu(self.fc1(combined_features))
-        output_reg = self.reg_head[1](F.relu(self.reg_head[0](x)))  # predicted viscosity value
+        x = self.dp(x)
+        x = self.layernorm(x)
+        output_reg = self.reg_head(x)
 
         return output_reg
 
 
 # Training Loop
 def train_sequence_model(
-    model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, num_epochs=10, device="cpu", start_epoch=0
+    model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=10, device="cpu", start_epoch=0
 ):
-    # Freeze CNN for the first 30 epochs
-    if start_epoch < 30:
-        print("Freezing CNN for the first 30 epochs...")
-        for param in model.cnn.parameters():
-            param.requires_grad = False
-
     for epoch in range(start_epoch, num_epochs):
         model.train()
         running_loss = 0.0
         total_cls_loss = 0.0
         stop_cls = False  # Flag to stop optimizing classification head
 
-        # Unfreeze CNN after 30 epochs
-        if epoch == 30:
-            print("Unfreezing CNN after 30 epochs...")
-            for param in model.cnn.parameters():
-                param.requires_grad = True
-
-        for masks, velocities, labels, vis in train_dataloader:
+        for masks, velocities, _, vis in train_dataloader:
             masks = masks.to(device)
             velocities = velocities.to(device)
-            labels = labels.to(device)
+            # labels = labels.to(device)
             vis = vis.to(device)
 
             # Zero the parameter gradients
@@ -182,6 +178,7 @@ def train_sequence_model(
 
             # Track loss
             running_loss += loss.item()
+        scheduler.step(running_loss)    
 
         print(f"Epoch [{epoch + 1}/{num_epochs}], Total Loss: {running_loss / len(train_dataloader):.4f}")
 
@@ -208,13 +205,15 @@ def train_sequence_model(
                     velocities = velocities.to(device)
                     labels = labels.to(device)
                     vis = vis.to(device)
+                    vis_max = max(vis)
+                    vis_min = min(vis)
 
                     # Forward pass
                     output_reg = model(masks, velocities)
-                    predicted_reg = output_reg
+                    predicted_reg = output_reg.to(device) #* (vis_max - vis_min) + vis_min
 
                     # Log Validation Loss
-                    loss = criterion_reg(output_reg, vis)
+                    loss = 10*criterion_reg(output_reg, vis)
                     wandb.log({
                         "validation loss reg": loss.item(),
                     })
@@ -225,14 +224,34 @@ def train_sequence_model(
 
                     # Accuracy calculation
                     total += labels.size(0)
-                    mse_reg = F.mse_loss(predicted_reg, vis, reduction="sum").item()
-                    wandb.log({"validation MSE reg": mse_reg})
+                    # mse_reg = F.mse_loss(predicted_reg, vis, reduction="sum").item()
+                    l1_reg = F.l1_loss(predicted_reg, vis, reduction="sum").item()
+                    wandb.log({"validation L1 reg": l1_reg})
 
             print(f"Predictions reg: {predictions_reg}")
             print(f"Ground Truths reg: {ground_truths_reg}")
             model.train()
 
-            
+def diagnose_dataset(dataloader):
+    viscosity_values = []
+    velocities_values = []
+
+    for idx, (masks, velocities, labels, vis) in enumerate(dataloader):
+        viscosity_values.extend(vis.numpy())
+        velocities_values.extend(velocities.numpy())
+        print(f"Batch {idx + 1}: Viscosity: {vis.numpy()}, Velocities: {velocities.numpy()}")
+
+    print("Viscosity Statistics:")
+    print(f"Mean: {np.mean(viscosity_values)}")
+    print(f"Std Dev: {np.std(viscosity_values)}")
+    print(f"Min: {np.min(viscosity_values)}")
+    print(f"Max: {np.max(viscosity_values)}")
+
+    print("\nVelocity Statistics:")
+    print(f"Mean: {np.mean(velocities_values)}")
+    print(f"Std Dev: {np.std(velocities_values)}")
+    print(f"Min: {np.min(velocities_values)}")
+    print(f"Max: {np.max(velocities_values)}")
 
 # Main Script
 if __name__ == "__main__":
@@ -252,7 +271,7 @@ if __name__ == "__main__":
     2: Low
     '''
     labels_dict = {3:0, 4:0, 2:1, 1:2, 6:2}  # Viscosity labels
-    vis_dict = {3:30, 4:15, 2:1.1, 1:0.023, 6:0.3395}
+    vis_dict = {3:1.477, 4:1.176, 2:0.0414, 1:-1.6382, 6:-0.4691}
     velocities = {3:15, 4:15, 2:15, 1:15, 6:15}  # Angular velocities
     
     labels_val = {7:2, 8:2, 9:2}
@@ -263,22 +282,29 @@ if __name__ == "__main__":
     transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),  # No need for 3-channel normalization
+    transforms.RandomAffine(degrees=5, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
 ])
 
 
     # Dataset and DataLoader
     dataset = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform)
-    train_dataloader = DataLoader(dataset, batch_size=7, shuffle=True)
+    train_dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
     
-    dataset_val = SequenceViscosityDataset(base_dir, labels_val, vis_val, velocities_val, transform)
-    valid_dataloader = DataLoader(dataset_val, batch_size=7, shuffle=True)
+    dataset_val = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform)
+    valid_dataloader = DataLoader(dataset_val, batch_size=2, shuffle=True)
 
     # Model, Loss, and Optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = SequenceViscosityClassifier().to(device)
     criterion_cls = nn.CrossEntropyLoss()
-    criterion_reg = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.07)
+    # criterion_reg = nn.MSELoss()
+    # criterion_reg = nn.L1Loss()
+    criterion_reg = nn.SmoothL1Loss() # Huber loss
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
     # set different lrs for cls and reg heads
     # optimizer = optim.Adam([
     #     {"params": model.cnn.parameters(), "lr": 0.001},
@@ -314,6 +340,9 @@ if __name__ == "__main__":
         "start_epoch": start_epoch
     })  # Initialize
     wandb.watch(model, log="all")
-
+    
+    # Call this before training
+    # diagnose_dataset(train_dataloader)
+    # exit()
     # Train the Model
-    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, num_epochs=1000, device=device, start_epoch=start_epoch)
+    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=1000, device=device, start_epoch=start_epoch)
