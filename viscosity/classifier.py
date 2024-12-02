@@ -316,7 +316,6 @@ if __name__ == "__main__":
     transforms.Normalize(mean=[0.5], std=[0.5]),
     transforms.RandomAffine(degrees=5, translate=(0.1, 0.1), scale=(0.9, 1.1)),
     transforms.RandomHorizontalFlip(p=0.5),
-    # transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0.5),
     transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
     # transforms.GaussianBlur(kernel_size=3),
     # transforms.RandomGrayscale(p=0.1),
@@ -382,18 +381,18 @@ if __name__ == "__main__":
     dataset_val = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform, seq_len=1, mode="val")
     valid_dataloader = DataLoader(dataset_val, batch_size=32)
     
-    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=100, device=device, start_epoch=start_epoch, k=1)
-    torch.cuda.empty_cache()
+    # train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=100, device=device, start_epoch=start_epoch, k=1)
+    # torch.cuda.empty_cache()
 
     # Train the Model
     # for k in range(5, 50, 5):
     # use tqdm for progress bar
-    for k in tqdm.tqdm(range(5, 75, 5)):
+    for k in tqdm.tqdm(range(5, 55, 5)):
         dataset = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform, seq_len=k, mode="train")
     #     sampler = CyclicSampler(dataset, batch_size=32)
         train_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
         
         dataset_val = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform, seq_len=k, mode="val")
         valid_dataloader = DataLoader(dataset_val, batch_size=32)
-        train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=100, device=device, start_epoch=start_epoch, k=k)
+        train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=90, device=device, start_epoch=start_epoch, k=k)
         torch.cuda.empty_cache()

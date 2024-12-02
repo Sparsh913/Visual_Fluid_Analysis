@@ -156,10 +156,10 @@ if __name__ == "__main__":
         transforms.ToTensor(),  # No 3-channel normalization
     ])
 
-    for k in range(5, 75, 5):
+    for k in range(1, 55, 5):
         
         # Test Configuration
-        checkpoint_path = f"viscosity/new_data_11_24/k_ablation/sequence_model_epoch_cls_k_{k}_100.pt"  # Replace with the actual path to your checkpoint
+        checkpoint_path = f"viscosity/new_data_11_24/k_ablation/sequence_model_epoch_cls_k_{k}_90.pt"  # Replace with the actual path to your checkpoint
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Test the model
