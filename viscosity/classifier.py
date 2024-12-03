@@ -313,13 +313,18 @@ if __name__ == "__main__":
     transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),  # No need for 3-channel normalization
-    transforms.Normalize(mean=[0.5], std=[0.5]),
+    # transforms.Normalize(mean=[0.5], std=[0.5]),
     transforms.RandomAffine(degrees=5, translate=(0.1, 0.1), scale=(0.9, 1.1)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
     # transforms.GaussianBlur(kernel_size=3),
     # transforms.RandomGrayscale(p=0.1),
     # transforms.RandomApply([transforms.ElasticTransform(alpha=1.0)], p=0.3),
+])
+    
+    transform_val = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),  # No need for 3-channel normalization
 ])
 
 
@@ -387,7 +392,7 @@ if __name__ == "__main__":
     # Train the Model
     # for k in range(5, 50, 5):
     # use tqdm for progress bar
-    for k in tqdm.tqdm(range(5, 55, 5)):
+    for k in tqdm.tqdm(range(5, 85, 5)):
         dataset = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform, seq_len=k, mode="train")
     #     sampler = CyclicSampler(dataset, batch_size=32)
         train_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)

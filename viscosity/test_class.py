@@ -138,7 +138,7 @@ if __name__ == "__main__":
     labels_dict = {3:0, 4:0, 2:1, 1:2, 6:2, 7:2, 8:2, 9:2, 10:0}  # Viscosity labels
     vis_dict = {1:0.023, 2:1.1, 3:30, 4:15, 6:0.3395, 7:0.0965, 8:0.048, 9: 0.001, 10:30}  # Viscosity values
     velocities = {1: 15, 2: 15, 6: 15, 7: 15, 8: 15, 9:15, 3:15, 4:15, 10:15}  # Angular velocities
-    # labels_dict = {8:0, 9:0, 10:1}  # Viscosity labels
+    # labels_dict = {8:2, 9:2, 10:2}  # Viscosity labels
     # vis_dict = {8:0.048, 9:0.001, 10:1.1}  # Viscosity values
     # velocities = {8:15, 9:15, 10:15}  # Angular velocities
     
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         transforms.ToTensor(),  # No 3-channel normalization
     ])
 
-    for k in range(1, 55, 5):
+    for k in range(5, 55, 5):
         
         # Test Configuration
         checkpoint_path = f"viscosity/new_data_11_24/k_ablation/sequence_model_epoch_cls_k_{k}_90.pt"  # Replace with the actual path to your checkpoint
