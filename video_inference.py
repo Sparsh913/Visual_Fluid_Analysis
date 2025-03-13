@@ -12,21 +12,23 @@ def show_mask(mask, ax, obj_id=None, random_color=False):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
-        cmap = plt.get_cmap("tab10")
-        cmap_idx = 0 if obj_id is None else obj_id
-        color = np.array([*cmap(cmap_idx)[:3], 0.6])
+        # cmap = plt.get_cmap("tab10")
+        # cmap_idx = 0 if obj_id is None else obj_id
+        # color = np.array([*cmap(cmap_idx)[:3], 0.6])
+        # grey color
+        color = np.array([0.5, 0.5, 0.5, 0.6])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
 
-sam2_checkpoint = "sam2_logs/configs/sam2.1_training/sam2.1_hiera_t_liq_finetune_copy.yaml/checkpoints/checkpoint.pt"
+sam2_checkpoint = "sam2_logs/configs/sam2.1_training/sam2.1_hiera_t_liq_finetune_copy.yaml/checkpoints_2/checkpoint.pt" # checkpoint in checkpoints_2 is the best model trained
 model_cfg = "configs/sam2.1/sam2.1_hiera_t.yaml"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
-video_dir = 'test_liq2/vialw'
-output_dir = 'test_liq2/masks_w'
+video_dir = 'test_liq3/images/'
+output_dir = 'test_liq3/masks/'
 os.makedirs(output_dir, exist_ok=True)
 
 # scan all the JPEG frame names in this directory
@@ -63,6 +65,6 @@ for frame_idx, obj_masks in video_segments.items():
     ax.axis("off")
     # ax.set_title(f"Frame {frame_idx}")
     for obj_id, mask in obj_masks.items():
-        show_mask(mask, ax, obj_id=obj_id, random_color=True)
+        show_mask(mask, ax, obj_id=obj_id, random_color=False)
     plt.savefig(os.path.join(output_dir, f"{frame_idx}.png"), bbox_inches="tight")
     plt.close()    

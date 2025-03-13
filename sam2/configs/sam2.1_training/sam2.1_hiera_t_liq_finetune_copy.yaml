@@ -4,12 +4,12 @@ scratch:
   resolution: 512 #1024
   train_batch_size: 4
   num_train_workers: 5
-  num_frames: 8
+  num_frames: 5 #8
   max_num_objects: 1
   base_lr: 5.0e-6
   vision_lr: 3.0e-06
   phases_per_epoch: 1
-  num_epochs: 3000
+  num_epochs: 600
 
 dataset:
   # PATHS to Dataset
@@ -311,7 +311,7 @@ trainer:
 
   # initialize from a SAM 2 checkpoint
   checkpoint:
-    save_dir: ${launcher.experiment_log_dir}/checkpoints
+    save_dir: ${launcher.experiment_log_dir}/checkpoints_4
     save_freq: 0 # 0 only last checkpoint is saved.
     model_weight_initializer:
       _partial_: True
