@@ -182,7 +182,6 @@ def test_model(checkpoint_path, base_dir, labels_dict, vis_dict, velocities, tra
             predictions_cls.extend(predicted_cls.cpu().numpy())
             ground_truths_cls.extend(labels.cpu().numpy())
         
-        # print("len of predictions_cls", len(predictions_cls))
         # Calculate and log overall accuracy
         overall_accuracy = 100 * correct_cls / total
         print(f"======================{k}======================")
@@ -196,6 +195,7 @@ def test_model(checkpoint_path, base_dir, labels_dict, vis_dict, velocities, tra
                 # Optionally, you can also log the confusion details
                 print(f'Predictions for masks_{key}: {vial_predictions[key]}')
                 print(f'Ground Truths for masks_{key}: {vial_ground_truths[key]}')
+                print("len(vial_predictions[key])", len(vial_predictions[key]))
 
 # Main Script
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from sam2.build_sam import build_sam2
 from sam2.build_sam import build_sam2_video_predictor
+import cv2
 
 def show_mask(mask, ax, obj_id=None, random_color=False):
     if random_color:
