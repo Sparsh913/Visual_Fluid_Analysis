@@ -1,0 +1,14 @@
+{
+    "train": {
+      "vial_1": ["constant_motion_speed_20", "constant_motion_speed_50"],
+      "vial_6": ["sinusoidal_motion_freq_.25"]
+    },
+    "val": {
+      "vial_1": ["constant_motion_speed_80"]
+    },
+    "test": [
+      "vial_03",
+      "vial_04"
+    ]
+  }
+  

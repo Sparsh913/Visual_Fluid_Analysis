@@ -79,11 +79,11 @@ def process_images(image_dir):
 
             # Save as PNG
             if SAVE_PNG:
-                cv2.imwrite(os.path.join(output_dir, f"{frame_idx}.png"), mask)
+                cv2.imwrite(os.path.join(output_dir, f"{frame_idx+1}.png"), mask)
 
             # Save as NumPy array
             if SAVE_NPY:
-                np.save(os.path.join(output_dir, f"{frame_idx}.npy"), mask)
+                np.save(os.path.join(output_dir, f"{frame_idx+1}.npy"), mask)
 
 
 def traverse_and_process(root_directory):
