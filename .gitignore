@@ -7,5 +7,5 @@ __pycache__/
 build/*
 _C.*
 outputs/*
-checkpoints/*
-wandb/*
+**/checkpoints/*
+**/wandb/*
