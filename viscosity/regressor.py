@@ -93,6 +93,7 @@ class SequenceViscosityDataset(Dataset):
         self.transform = transform
         self.seq_len = seq_len
         self.mode = mode
+        self.label_keys = list(labels_dict_vis.keys())
 
         # Collect all sequences (folders)
         self.sequences = [
@@ -166,8 +167,16 @@ class SequenceViscosityDataset(Dataset):
 
         # Stack masks into a tensor of shape (seq_len, 1, H, W)
         masks = torch.stack(masks, dim=0)
+        
+        # label_key = self.label_keys[idx]
+        # label = self.labels_dict_cls[label_key]
+        # viscosity = self.labels_dict_vis[label_key]
+        # velocity = self.velocities[label_key]
 
-        return masks, torch.tensor(velocity, dtype=torch.float32), label, torch.tensor(viscosity, dtype=torch.float32)
+        return masks, torch.tensor(velocity, dtype=torch.float32), label, torch.tensor(viscosity, dtype=torch.float32)\
+            
+    def get_label_keys(self, start_idx, end_idx):
+        return self.label_keys[start_idx:end_idx]
 
 
 # Model Definition
@@ -235,7 +244,7 @@ class SequenceViscosityRegressor(nn.Module):
     
     
 class EnhancedSequenceViscosityRegressor(nn.Module):
-    def __init__(self, num_classes=3, cnn_feature_dim=512, velocity_dim=32):
+    def __init__(self, cnn_feature_dim=512, velocity_dim=32):
         super().__init__()
         
         # CNN Backbone
@@ -257,7 +266,7 @@ class EnhancedSequenceViscosityRegressor(nn.Module):
             nn.Linear(1, velocity_dim),
             # nn.BatchNorm1d(velocity_dim),
             nn.ReLU(),
-            nn.Dropout(0.3)
+            # nn.Dropout(0.3)
         )
         
         # Regression Head
@@ -310,15 +319,16 @@ class EnhancedSequenceViscosityRegressor(nn.Module):
 
 # Training Loop
 def train_sequence_model(
-    model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=10, device="cpu", start_epoch=0
+    model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=10, device="cpu", start_epoch=0, k=10
 ):
+    min_loss = float("inf")
     for epoch in range(start_epoch, num_epochs):
         model.train()
         running_loss = 0.0
         total_cls_loss = 0.0
         stop_cls = False  # Flag to stop optimizing classification head
 
-        for masks, velocities, _, vis in train_dataloader:
+        for j, (masks, velocities, _, vis) in enumerate(train_dataloader):
             masks = masks.to(device)
             velocities = velocities.to(device)
             # labels = labels.to(device)
@@ -331,6 +341,18 @@ def train_sequence_model(
             output_reg = model(masks, velocities)
             # loss1 = criterion_cls(output_cls, labels)
             loss = criterion_reg(output_reg, vis.view(-1,1))
+            if loss.item() < min_loss:
+                min_loss = loss.item()
+                print(f"Min loss: {min_loss}")
+                torch.save(
+                    {
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "epoch": epoch,
+                        "loss": loss.item(),
+                    },
+                    f"viscosity/new_data_11_24/k_reg_2/sequence_model_best_reg_{k}.pt",
+                )
 
             wandb.log({
                 "training_loss_reg": loss.item(),
@@ -342,19 +364,24 @@ def train_sequence_model(
             loss.backward()
 
             # Gradient Clipping
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+            
+            grad_norms = {}
+            for name, param in model.named_parameters():
+                grad_norms[f"grad_norm/{name}"] = param.grad.norm().item()
+            wandb.log(grad_norms)
 
             # Optimization step
             optimizer.step()
 
             # Track loss
             running_loss += loss.item()
-        scheduler.step(running_loss)    
+        scheduler.step()
 
         print(f"Epoch [{epoch + 1}/{num_epochs}], Total Loss: {running_loss / len(train_dataloader):.4f}")
 
         # Save the model checkpoint
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 50 == 0:
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
@@ -362,7 +389,7 @@ def train_sequence_model(
                     "epoch": epoch,
                     "loss": running_loss / len(train_dataloader),
                 },
-                f"viscosity/new_data_11_24/sequence_model_epoch_reg_{epoch+1}.pt",
+                f"viscosity/new_data_11_24/k_reg_2/sequence_model_epoch_reg_{k}_{epoch+1}.pt",
             )
 
             # Test the model on the validation set
@@ -370,8 +397,10 @@ def train_sequence_model(
             total = 0
             predictions_reg = []
             ground_truths_reg = []
+            label_keys = []  # To store the unique label key indices
+            idx_to_label_key = list(valid_dataloader.dataset.labels_dict_cls.keys())
             with torch.no_grad():
-                for masks, velocities, labels, vis in valid_dataloader:
+                for idx, (masks, velocities, labels, vis) in enumerate(valid_dataloader):
                     masks = masks.to(device)
                     velocities = velocities.to(device)
                     labels = labels.to(device)
@@ -394,6 +423,9 @@ def train_sequence_model(
                     # Record predictions and ground truths
                     predictions_reg.extend(predicted_reg.cpu().numpy())
                     ground_truths_reg.extend(vis.cpu().numpy())
+                    
+                    # Extract unique label keys based on dataset sequences
+                    label_keys.extend(idx_to_label_key[idx * valid_dataloader.batch_size:(idx + 1) * valid_dataloader.batch_size])
 
                     # Accuracy calculation
                     total += labels.size(0)
@@ -401,8 +433,16 @@ def train_sequence_model(
                     l1_reg = F.l1_loss(predicted_reg, vis, reduction="sum").item()
                     wandb.log({"validation L1 reg": l1_reg})
 
-            print(f"Predictions reg: {predictions_reg}")
-            print(f"Ground Truths reg: {ground_truths_reg}")
+            # print(f"Predictions reg: {predictions_reg}")
+            # print(f"Ground Truths reg: {ground_truths_reg}")
+            # scheduler.step(running_loss / len(train_dataloader))
+            # Print detailed results
+            print("\nValidation Results:")
+            print(f"{'Label Key':<10}{'Ground Truth':<15}{'Prediction':<15}")
+            print("=" * 40)
+            for i in range(len(predictions_reg)):
+                print(f"{label_keys[i]:<10}{ground_truths_reg[i].item():<15.4f}{predictions_reg[i].item():<15.4f}")
+                
             model.train()
 
 def diagnose_dataset(dataloader):
@@ -472,18 +512,22 @@ if __name__ == "__main__":
     transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),  # No need for 3-channel normalization
+    # transforms.Normalize(mean=[0.5], std=[0.5]),
     transforms.RandomAffine(degrees=5, translate=(0.1, 0.1), scale=(0.9, 1.1)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
 ])
-
+    transform_val = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),  # No need for 3-channel normalization
+    ])
 
     # Dataset and DataLoader
     dataset = SequenceViscosityDataset(base_dir, labels_dict, normalized_vis_dict, velocities, transform, seq_len=20, mode="train")
     train_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
     
-    dataset_val = SequenceViscosityDataset(base_dir, labels_dict, normalized_vis_dict, velocities, transform, seq_len=20, mode="val")
-    valid_dataloader = DataLoader(dataset_val, batch_size=64, shuffle=True)
+    dataset_val = SequenceViscosityDataset(base_dir, labels_dict, normalized_vis_dict, velocities, transform_val, seq_len=20, mode="val")
+    valid_dataloader = DataLoader(dataset_val, batch_size=64)
 
     # Model, Loss, and Optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -493,7 +537,7 @@ if __name__ == "__main__":
     # criterion_reg = nn.L1Loss()
     # criterion_reg = nn.SmoothL1Loss() # Huber loss
     criterion_reg = mixed_viscosity_loss
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
@@ -523,7 +567,7 @@ if __name__ == "__main__":
     else:
         start_epoch = 0
         
-    wandb.init(project="sequence-viscosity-classification", config={
+    wandb.init(project="sequence-viscosity-regress", config={
         "base_dir": base_dir,
         "labels_dict": labels_dict,
         "velocities": velocities,
@@ -541,5 +585,10 @@ if __name__ == "__main__":
     # Call this before training
     # diagnose_dataset(train_dataloader)
     # exit()
-    # Train the Model
-    train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=1000, device=device, start_epoch=start_epoch)
+    for k in range(10, 60, 10):
+        dataset = SequenceViscosityDataset(base_dir, labels_dict, normalized_vis_dict, velocities, transform, seq_len=k, mode="train")
+        train_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+        dataset_val = SequenceViscosityDataset(base_dir, labels_dict, normalized_vis_dict, velocities, transform_val, seq_len=k, mode="val")
+        valid_dataloader = DataLoader(dataset_val, batch_size=64)
+        # Train the Model
+        train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=1000, device=device, start_epoch=start_epoch, k=k)

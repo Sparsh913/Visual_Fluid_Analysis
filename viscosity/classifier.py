@@ -153,6 +153,7 @@ class SequenceViscosityDataset(Dataset):
         self.train_data = {}
         self.val_data = {}
         self.test_data = {}
+        self.extrapolate_data = {}
         for folder, _, _, _ in self.sequences:
             mask_paths = self.folder_data[folder]
             num_masks = len(mask_paths)
@@ -176,6 +177,8 @@ class SequenceViscosityDataset(Dataset):
             # print("length of val_data", len(self.val_data[folder]))
             self.test_data[folder] = self.first_half[- self.seq_len:] + self.second_half[- self.seq_len:]
             # print("length of test_data", len(self.test_data[folder]))
+            # for extrapolation no splits are needed, include every mask in the folder
+            self.extrapolate_data[folder] = mask_paths
             
 
     def __len__(self):
@@ -191,6 +194,8 @@ class SequenceViscosityDataset(Dataset):
             # return sum(len(paths) // self.chunk_len for paths in self.test_data.values())
             # return len(self.test_data)
             return self.data_points * 2 * len(self.labels_dict_cls)
+        elif self.mode == "extrapolate":
+            return sum(len(paths) for paths in self.extrapolate_data.values()) - self.chunk_len + 1
 
     def __getitem__(self, idx):
         # Determine which data split to use
@@ -200,6 +205,8 @@ class SequenceViscosityDataset(Dataset):
             data_split = self.val_data
         elif self.mode == "test":
             data_split = self.test_data
+        elif self.mode == "extrapolate":
+            data_split = self.extrapolate_data
         else:
             raise ValueError(f"Invalid mode: {self.mode}")
 
@@ -234,7 +241,7 @@ class SequenceViscosityDataset(Dataset):
         #     start_idx_2 = idx % self.data_points + self.seq_len
         #     start_idx = start_idx_1 if idx % 2 == 0 else start_idx_2
         #     sampled_paths = mask_paths[start_idx:start_idx + self.chunk_len]
-        else:
+        elif self.mode == "test" or self.mode == "val":
             # select start_idx from the first half and then the second half and then repeat for the next test
             start_idx_1 = idx % self.data_points
             # print("start_idx_1", start_idx_1)
@@ -244,6 +251,9 @@ class SequenceViscosityDataset(Dataset):
             # print("length of mask_paths", len(mask_paths))
             sampled_paths = mask_paths[start_idx:start_idx + self.chunk_len]
             # print("length of sampled_paths", len(sampled_paths))
+        else:
+            start_idx = idx % (num_masks - self.chunk_len + 1)
+            sampled_paths = mask_paths[start_idx:start_idx + self.chunk_len]
 
         # Load and transform masks
         masks = []
@@ -334,7 +344,7 @@ class SequenceViscosityClassifier(nn.Module):
 
 # Training Loop
 def train_sequence_model(
-    model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=10, device="cpu", start_epoch=0, k=50
+    model, train_dataloader, valid_dataloader, test_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=10, device="cpu", start_epoch=0, k=50
 ):
     for epoch in range(start_epoch, num_epochs):
         model.train()
@@ -444,9 +454,78 @@ def train_sequence_model(
                             f"total_samples_masks_{key}": vial_total[key]
                         })
                         
+                        print(f'Predictions for masks_{key}: {vial_predictions[key]}')
+                        print(f'Ground Truths for masks_{key}: {vial_ground_truths[key]}')
+                        
+                # Log confusion matrix
+                wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None, y_true=ground_truths_cls, preds=predictions_cls)})
+                
+            # Test the model on the test set
+            total = 0
+            correct_cls = 0
+            predictions_cls = []
+            ground_truths_cls = []
+            
+            # Initialize dictionaries to track per-label accuracy
+            label_keys = list(test_dataloader.dataset.labels_dict_cls.keys())
+            vial_predictions = {key: [] for key in label_keys}
+            vial_ground_truths = {key: [] for key in label_keys}
+            vial_total = {key: 0 for key in label_keys}
+            vial_correct = {key: 0 for key in label_keys}
+            
+            with torch.no_grad():
+                for idx, (masks, velocities, labels, *_) in enumerate(test_dataloader):
+                    masks = masks.to(device)
+                    velocities = velocities.to(device)
+                    labels = labels.to(device)
+                    
+                    # Forward pass
+                    output_cls = model(masks, velocities)
+                    _, predicted_cls = torch.max(output_cls, 1)
+                    
+                    # Overall accuracy calculation
+                    total += labels.size(0)
+                    correct_cls += (predicted_cls == labels).sum().item()
+                    
+                    # Per-label key accuracy calculation
+                    for i in range(len(labels)):
+                        # Get the folder index (label key) for this specific sample
+                        folder_idx = int(test_dataloader.dataset.vial_tracker[idx * test_dataloader.batch_size + i])
+                        
+                        # Store predictions and ground truths for each label key
+                        vial_predictions[folder_idx].append(predicted_cls[i].item())
+                        vial_ground_truths[folder_idx].append(labels[i].item())
+                        vial_total[folder_idx] += 1
+                        
+                        # Check correctness for this specific sample
+                        if predicted_cls[i] == labels[i]:
+                            vial_correct[folder_idx] += 1
+                    
+                    # Store predictions for potential later analysis
+                    predictions_cls.extend(predicted_cls.cpu().numpy())
+                    ground_truths_cls.extend(labels.cpu().numpy())
+                
+                # Calculate and log overall accuracy
+                overall_accuracy = 100 * correct_cls / total
+                print(f"Test Accuracy: {overall_accuracy:.2f}%")
+                wandb.log({"test_accuracy": overall_accuracy})
+                
+                # Calculate and log per-label key accuracy
+                for key in label_keys:
+                    if vial_total[key] > 0:
+                        vial_accuracy = 100 * vial_correct[key] / vial_total[key]
+                        print(f"Test Accuracy for masks_{key}: {vial_accuracy:.2f}%")
+                        wandb.log({
+                            f"test_accuracy_masks_{key}": vial_accuracy,
+                            f"total_samples_masks_{key}": vial_total[key]
+                        })
+                        
                         # Optionally, you can also log the confusion details
                         print(f'Predictions for masks_{key}: {vial_predictions[key]}')
                         print(f'Ground Truths for masks_{key}: {vial_ground_truths[key]}')
+                        
+                # Log confusion matrix
+                wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs= None, y_true=ground_truths_cls, preds=predictions_cls)})
             model.train()
                     
 
@@ -591,5 +670,7 @@ if __name__ == "__main__":
         
         dataset_val = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform_val, seq_len=k, mode="val", datapoints=d)
         valid_dataloader = DataLoader(dataset_val, batch_size=256)
-        train_sequence_model(model, train_dataloader, valid_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=100, device=device, start_epoch=start_epoch, k=k)
+        dataset_test = SequenceViscosityDataset(base_dir, labels_dict, vis_dict, velocities, transform_val, seq_len=k, mode="test", datapoints=d)
+        test_dataloader = DataLoader(dataset_test, batch_size=256)
+        train_sequence_model(model, train_dataloader, valid_dataloader, test_dataloader, criterion_cls, criterion_reg, optimizer, scheduler, num_epochs=100, device=device, start_epoch=start_epoch, k=k)
         torch.cuda.empty_cache()

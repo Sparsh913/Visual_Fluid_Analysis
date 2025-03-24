@@ -38,8 +38,8 @@ def show_anns(anns, output_path, borders=True):
     plt.close()
 
 # Configuration
-image_folder = 'training/dataset/train_liq/JPEGImages/stream_2'  # Folder containing images
-output_folder = 'training/dataset/valid_liq/MaskImages/stream_2'  # Folder to save masks
+image_folder = 'test_liq3/images_constant/'  # Folder containing images
+output_folder = 'test_liq3/masks_constant/'  # Folder to save masks
 os.makedirs(output_folder, exist_ok=True)
 
 sam2_checkpoint = "sam2_logs/configs/sam2.1_training/sam2.1_hiera_t_liq_finetune_copy.yaml/checkpoints/checkpoint.pt"

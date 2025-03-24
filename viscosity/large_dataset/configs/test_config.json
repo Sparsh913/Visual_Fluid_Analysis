@@ -1,14 +1,43 @@
 {
     "train": {
-      "vial_1": ["constant_motion_speed_20", "constant_motion_speed_50"],
-      "vial_6": ["sinusoidal_motion_freq_.25"]
+      "vial_1": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_6": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_7": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_8": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_9": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_10": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_11": ["constant_motion_speed_20", "constant_motion_speed_50", 
+      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"]
     },
     "val": {
-      "vial_1": ["constant_motion_speed_80"]
+      "vial_1": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_6": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_7": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_8": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_9": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_10": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"],
+      "vial_11": ["constant_motion_speed_80", "sinusoidal_motion_freq_.33"]
     },
     "test": [
       "vial_03",
       "vial_04"
-    ]
+    ],
+    "seed": 42,
+    "batch_size": 36,
+    "lr": 0.0001,
+    "epochs": 100
   }
   
