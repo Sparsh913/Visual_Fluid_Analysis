@@ -14,7 +14,10 @@ class FluidViscosityDataset(Dataset):
                  split='train',
                  sequence_length=5,
                  mask_format='png',
-                 transform=None):
+                 transform=None,
+                 normalize_robot_data=True,
+                 normalize_timestamps=True,
+                 robot_mean_std=None):
         """
         Args:
             root_dir: str, path to the data root containing vial directories
@@ -24,12 +27,18 @@ class FluidViscosityDataset(Dataset):
             sequence_length: int, number of frames per sequence
             mask_format: 'png' or 'npy'
             transform: optional transform for masks
+            normalize_robot_data: bool, whether to normalize robot joint data
+            normalize_timestamps: bool, whether to scale timestamps per sequence
+            robot_mean_std: dict with 'mean' and 'std' tensors for robot data (for val/test)
         """
         self.root_dir = root_dir
         self.split = split
         self.sequence_length = sequence_length
         self.mask_format = mask_format
         self.transform = transform
+        self.normalize_robot_data = normalize_robot_data
+        self.normalize_timestamps = normalize_timestamps
+        self.robot_mean_std = robot_mean_std
 
         # Load vial label CSV
         df = pd.read_csv(vial_label_csv)
@@ -41,7 +50,18 @@ class FluidViscosityDataset(Dataset):
             self.config = json.load(f)
 
         self.samples = []
+        self.all_robot_vals = [] if split == 'train' and normalize_robot_data and robot_mean_std is None else None
         self._prepare_samples()
+
+        if self.split == 'train' and self.normalize_robot_data and self.robot_mean_std is None:
+            all_vals = torch.tensor(self.all_robot_vals, dtype=torch.float32)
+            self.robot_mean = all_vals.mean(dim=0)
+            self.robot_std = all_vals.std(dim=0) + 1e-6
+        elif self.robot_mean_std:
+            self.robot_mean = torch.tensor(self.robot_mean_std['mean'], dtype=torch.float32)
+            self.robot_std = torch.tensor(self.robot_mean_std['std'], dtype=torch.float32)
+        else:
+            self.robot_mean, self.robot_std = None, None
 
     def _prepare_samples(self):
         print(f"Preparing samples for split: {self.split}")
@@ -59,14 +79,12 @@ class FluidViscosityDataset(Dataset):
                 print(f"[Warning] Vial path {vial_path} does not exist.")
                 continue
 
-            # If None, load all motion profiles in this vial
             motion_profiles = profile_list or sorted(os.listdir(vial_path))
 
             for profile in motion_profiles:
                 mp_path = os.path.join(vial_path, profile)
                 mask_dir = os.path.join(mp_path, "masks")
 
-                # Infer log file names
                 joint_log_file = [f for f in os.listdir(mp_path) if f.startswith("joint_log")][0]
                 image_log_file = [f for f in os.listdir(mp_path) if f.startswith("image_log")][0]
 
@@ -77,7 +95,6 @@ class FluidViscosityDataset(Dataset):
                     print(f"[Skipping] Incomplete profile: {mp_path}")
                     continue
 
-                # Load image timestamp mapping
                 img_map = {}
                 with open(image_log_path, 'r') as f:
                     for line in f:
@@ -86,7 +103,6 @@ class FluidViscosityDataset(Dataset):
                         timestamp = float(parts[1])
                         img_map[idx] = timestamp
 
-                # Parse joint log
                 joint_log = {}
                 with open(joint_log_path, 'r') as f:
                     for line in f:
@@ -110,11 +126,11 @@ class FluidViscosityDataset(Dataset):
                                 'speed': speeds[5],
                                 'accel': accels[5]
                             }
+
                         except Exception as e:
                             print(f"[Error] Parsing joint log at {mp_path}: {e}")
                             continue
 
-                # Build valid sequences
                 sorted_ids = sorted(set(img_map.keys()) & set(joint_log.keys()))
                 for i in range(len(sorted_ids) - self.sequence_length + 1):
                     ids_seq = sorted_ids[i:i + self.sequence_length]
@@ -130,6 +146,9 @@ class FluidViscosityDataset(Dataset):
                     if not masks_exist:
                         print(f"[Skip] Missing masks in sequence starting at {ids_seq[0]} in {mp_path}")
                         continue
+
+                    if self.all_robot_vals is not None:
+                        self.all_robot_vals.extend(list(zip(angles, speeds, accels)))
 
                     self.samples.append({
                         'mask_paths': [os.path.join(mask_dir, f"{idx}.{self.mask_format}") for idx in ids_seq],
@@ -148,9 +167,7 @@ class FluidViscosityDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        # Load masks
         mask_seq = []
-        mask_paths = [] # return mask paths for debugging
         for path in sample['mask_paths']:
             if self.mask_format == 'png':
                 mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -162,8 +179,7 @@ class FluidViscosityDataset(Dataset):
                 raise ValueError("Unsupported mask format.")
             if self.transform:
                 mask = self.transform(mask)
-            mask_seq.append(mask.unsqueeze(0))  # (1,H,W)
-            mask_paths.append(path)
+            mask_seq.append(mask.unsqueeze(0))
 
         mask_tensor = torch.stack(mask_seq)  # (T,1,H,W)
         robot_tensor = torch.tensor(
@@ -171,15 +187,23 @@ class FluidViscosityDataset(Dataset):
             dtype=torch.float32
         )  # (T,3)
 
+        if self.normalize_robot_data:
+            if self.robot_mean is not None:
+                robot_tensor = (robot_tensor - self.robot_mean) / self.robot_std
+            else:
+                robot_tensor = (robot_tensor - robot_tensor.mean(dim=0)) / (robot_tensor.std(dim=0) + 1e-6)
+
         ts = np.array(sample['timestamps'], dtype=np.float32)
-        # ts -= ts[0]  # normalize
+        ts -= ts[0]  # normalize to start at zero
+        if self.normalize_timestamps:
+            ts /= (ts[-1] + 1e-6)  # normalize to [0, 1] per sequence
+
         timestamp_tensor = torch.tensor(ts, dtype=torch.float32)  # (T,)
-        label = torch.tensor(sample['label'], dtype=torch.int64)  # (1,)
+        label = torch.tensor(sample['label'], dtype=torch.long)
 
         return {
             'masks': mask_tensor,
             'robot': robot_tensor,
             'timestamps': timestamp_tensor,
-            'label': label,
-            'mask_paths': mask_paths
+            'label': label
         }

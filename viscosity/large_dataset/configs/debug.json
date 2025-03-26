@@ -1,0 +1,22 @@
+{
+    "train": {
+      "vial_1": ["constant_motion_speed_80"],
+      "vial_6": ["constant_motion_speed_80"],
+      "vial_9": ["constant_motion_speed_80"]
+    },
+    "val": {
+      "vial_1": ["constant_motion_speed_20", "sinusoidal_motion_freq_.33"],
+      "vial_6": ["constant_motion_speed_20", "sinusoidal_motion_freq_.33"],
+      "vial_9": ["constant_motion_speed_20", "sinusoidal_motion_freq_.33"]
+    },
+    "test": [
+      "vial_03",
+      "vial_04"
+    ],
+    "sequence_length": 10,
+    "seed": 42,
+    "batch_size": 18,
+    "lr": 0.001,
+    "epochs": 100
+  }
+  

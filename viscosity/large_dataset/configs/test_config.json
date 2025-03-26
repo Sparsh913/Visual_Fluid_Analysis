@@ -35,9 +35,10 @@
       "vial_03",
       "vial_04"
     ],
+    "sequence_length": 10,
     "seed": 42,
-    "batch_size": 36,
-    "lr": 0.0001,
+    "batch_size": 18,
+    "lr": 0.001,
     "epochs": 100
   }
   

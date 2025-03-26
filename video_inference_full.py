@@ -15,7 +15,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
 # Root directory containing all vial data
-root_dir = "test_liq4"
+root_dir = "viscosity/large_dataset/data"
 
 # Set flag to save masks as .png and/or .npy
 SAVE_PNG = True  # Set to False if PNG is not needed
