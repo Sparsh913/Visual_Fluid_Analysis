@@ -11,7 +11,7 @@ from .mask_resnet import MaskResnet
 from .robot_encoder import RobotEncoder
 
 class MaskTimeSeries(nn.Module):
-    def __init__(self, embed_dim=160, num_heads=2, num_layers=1):
+    def __init__(self, embed_dim=160, num_heads=4, num_layers=1):
         super().__init__()
         self.mask_encoder = MaskResnet() 
         self.robot_encoder = RobotEncoder() 
@@ -20,7 +20,7 @@ class MaskTimeSeries(nn.Module):
             nn.Linear(32, embed_dim)
         )
         self.embed_dim = embed_dim
-        transformer_layer = nn.TransformerEncoderLayer(embed_dim, num_heads, dropout=0.0)
+        transformer_layer = nn.TransformerEncoderLayer(embed_dim, num_heads, dropout=0.1)
         self.transformer = nn.TransformerEncoder(transformer_layer, num_layers)
 
     def forward(self, mask_seq, robot_seq, timestamps):

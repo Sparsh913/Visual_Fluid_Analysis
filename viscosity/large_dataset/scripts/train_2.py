@@ -63,12 +63,30 @@ def main_worker(args, config, run_id):
     optimizer = optim.Adam(model.parameters(), lr=config['lr'])
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     optimizer.zero_grad()
+    start_epoch = 0
+    
+    if args.load_ckpt and os.path.exists(args.load_ckpt):
+        print(f"Loading checkpoint from {args.load_ckpt}")
+        checkpoint = torch.load(args.load_ckpt)
+        model.load_state_dict(checkpoint['model_state_dict'], map_location=device)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch']
+        train_loss = checkpoint['train_loss']
+        train_acc = checkpoint['train_acc']
+        val_loss = checkpoint['val_loss']
+        val_acc = checkpoint['val_acc']
+        ckpt_path = checkpoint['checkpoint_path']
+        print(f"Checkpoint loaded. Starting from epoch {start_epoch}")
+    # else:
+    #     model.apply(lambda m: nn.init.kaiming_normal_(m.weight) if hasattr(m, 'weight') else None)
+    #     model.apply(lambda m: nn.init.constant_(m.bias, 0) if hasattr(m, 'bias') else None)
 
     start = time()
     wandb.init(project=args.wandb_project, name=run_id, config=config)
     wandb.watch(model)
 
-    for epoch in tqdm(range(config['epochs']), desc="Epochs"):
+    for epoch in tqdm(range(start_epoch, start_epoch + config['num_epochs'])):
         torch.cuda.empty_cache()
         model.train()
         train_loss = 0
@@ -106,8 +124,23 @@ def main_worker(args, config, run_id):
         wandb.log({"train_loss": train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch})
         print(f"Epoch {epoch} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
 
-        if epoch % 5 == 0:
-            torch.save(model.state_dict(), os.path.join(args.checkpoint_path, run_id, f"epoch_{epoch}.pth"))
+        if epoch+1 % 5 == 0:
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'train_loss': train_loss,
+                'train_acc': train_acc,
+                'val_loss': val_loss,
+                'val_acc': val_acc,
+                'checkpoint_path': os.path.join(args.checkpoint_path, run_id)
+            }
+            if args.load_ckpt and os.path.exists(args.load_ckpt):
+                torch.save(checkpoint, os.path.join(ckpt_path, f"epoch_{epoch+1}.pth"))
+            else:
+                torch.save(checkpoint, os.path.join(args.checkpoint_path, run_id, f"epoch_{epoch+1}.pth"))
+            print(f"Checkpoint saved at epoch {epoch}")
 
     end = time()
     print(f"Training took {end - start:.2f} seconds")
@@ -120,6 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('--config_file', type=str, default='configs/full_config.json')
     parser.add_argument('--checkpoint_path', type=str, default='checkpoints/')
     parser.add_argument('--wandb_project', type=str, default='viscosity_cls')
+    parser.add_argument('--load_ckpt', type=str, default=None)
     args = parser.parse_args()
 
     with open(args.config_file, "r") as f:
@@ -127,6 +161,7 @@ if __name__ == "__main__":
 
     run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-{uuid.uuid4()}"
     os.makedirs(os.path.join(args.checkpoint_path, run_id), exist_ok=True)
+    print("checkpoints will be saved in ", os.path.join(args.checkpoint_path, run_id))
     shutil.copy(args.config_file, os.path.join(args.checkpoint_path, run_id))
 
     seed = config['seed']

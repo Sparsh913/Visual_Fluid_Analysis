@@ -156,7 +156,8 @@ class FluidViscosityDataset(Dataset):
                         'speeds': speeds,
                         'accels': accels,
                         'timestamps': timestamps,
-                        'label': self.label_to_int[self.vial_to_label[vial_id]]
+                        'label': self.label_to_int[self.vial_to_label[vial_id]],
+                        'vial_id': vial_id,
                     })
 
         print(f"Total sequences for split '{self.split}': {len(self.samples)}")
@@ -205,5 +206,6 @@ class FluidViscosityDataset(Dataset):
             'masks': mask_tensor,
             'robot': robot_tensor,
             'timestamps': timestamp_tensor,
-            'label': label
+            'label': label,
+            'vial_id': sample['vial_id'],
         }

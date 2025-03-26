@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH -N 1 # Number of nodes
+#SBATCH -n 2
+#SBATCH -p GPU-shared
+#SBATCH --gpus=v100-32:1 #GPU specification. H100
+#SBATCH -t 00-48:00 # Estimated time, 48hour max. DD-HH:MM.
+#SBATCH --job-name vis_cls
+#SBATCH -o job_test_1.out
+#SBATCH -e job_test_1.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=sparshg@andrew.cmu.edu
+# echo commands to stdout
+set -x
+EXE=/bin/bash
+source /ocean/projects/agr240001p/mqureshi/miniconda3/etc/profile.d/conda.sh
+conda activate sam2
+WORKING_DIR=/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset
+cd $WORKING_DIR
+export PYTHONPATH=$WORKING_DIR:$PYTHONPATH
+# sleep
+python scripts/test.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --config_file configs/valid_train_config.json --load_ckpt checkpoints/26-Mar_01-11-cb8f1605-be54-4faa-9122-129e6b477361/epoch_15.pth

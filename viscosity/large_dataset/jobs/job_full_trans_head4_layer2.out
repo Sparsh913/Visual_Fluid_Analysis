@@ -1,0 +1,23 @@
+Preparing samples for split: train
+Total sequences for split 'train': 26143
+Preparing samples for split: val
+Total sequences for split 'val': 1827
+Epoch 0 | Train Loss: 109.2395 | Train Acc: 0.3817 | Val Loss: 110.0958 | Val Acc: 0.4379
+Epoch 1 | Train Loss: 109.0907 | Train Acc: 0.3852 | Val Loss: 110.5814 | Val Acc: 0.4379
+Epoch 2 | Train Loss: 109.0948 | Train Acc: 0.3852 | Val Loss: 110.0669 | Val Acc: 0.4379
+Epoch 3 | Train Loss: 109.0887 | Train Acc: 0.3852 | Val Loss: 109.8968 | Val Acc: 0.4379
+Epoch 4 | Train Loss: 109.0950 | Train Acc: 0.3852 | Val Loss: 110.3601 | Val Acc: 0.4379
+Epoch 5 | Train Loss: 109.0988 | Train Acc: 0.3852 | Val Loss: 110.4059 | Val Acc: 0.4379
+Epoch 6 | Train Loss: 109.0926 | Train Acc: 0.3852 | Val Loss: 110.0384 | Val Acc: 0.4379
+Epoch 7 | Train Loss: 109.0959 | Train Acc: 0.3852 | Val Loss: 110.3395 | Val Acc: 0.4379
+Epoch 8 | Train Loss: 109.0843 | Train Acc: 0.3852 | Val Loss: 110.3884 | Val Acc: 0.4379
+Epoch 9 | Train Loss: 109.0869 | Train Acc: 0.3852 | Val Loss: 110.1668 | Val Acc: 0.4379
+Epoch 10 | Train Loss: 109.0860 | Train Acc: 0.3852 | Val Loss: 109.7810 | Val Acc: 0.4379
+Epoch 11 | Train Loss: 109.0897 | Train Acc: 0.3852 | Val Loss: 110.4172 | Val Acc: 0.4379
+Epoch 12 | Train Loss: 109.0809 | Train Acc: 0.3852 | Val Loss: 109.6780 | Val Acc: 0.4379
+Epoch 13 | Train Loss: 109.1885 | Train Acc: 0.3848 | Val Loss: 110.6737 | Val Acc: 0.4379
+Epoch 14 | Train Loss: 109.0883 | Train Acc: 0.3852 | Val Loss: 110.3753 | Val Acc: 0.4379
+Epoch 15 | Train Loss: 109.0848 | Train Acc: 0.3852 | Val Loss: 110.2301 | Val Acc: 0.4379
+Epoch 16 | Train Loss: 109.0738 | Train Acc: 0.3852 | Val Loss: 110.2500 | Val Acc: 0.4379
+Epoch 17 | Train Loss: 109.0821 | Train Acc: 0.3852 | Val Loss: 110.3879 | Val Acc: 0.4379
+Epoch 18 | Train Loss: 109.0860 | Train Acc: 0.3852 | Val Loss: 110.1927 | Val Acc: 0.4379
