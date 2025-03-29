@@ -2,11 +2,11 @@
 #SBATCH -N 1 # Number of nodes
 #SBATCH -n 5
 #SBATCH -p GPU-shared
-#SBATCH --gpus=v100-32:1 #GPU specification. H100
+#SBATCH --gpus=v100-32:4 #GPU specification. H100
 #SBATCH -t 00-48:00 # Estimated time, 48hour max. DD-HH:MM.
-#SBATCH --job-name 50ep_detailed_ckpt
-#SBATCH -o job_full_trans_head4_layer1_50_ep.out
-#SBATCH -e job_full_trans_head4_layer1_50_ep.err
+#SBATCH --job-name vis_cls
+#SBATCH -o job_res18_k30_head4_layer1.out
+#SBATCH -e job_res18_k30_head4_layer1.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sparshg@andrew.cmu.edu
 # echo commands to stdout
@@ -18,4 +18,4 @@ WORKING_DIR=/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/vis
 cd $WORKING_DIR
 export PYTHONPATH=$WORKING_DIR:$PYTHONPATH
 # sleep
-python scripts/train_2.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --config_file configs/valid_train_config.json --checkpoint_path checkpoints/ --wandb_project viscosity_cls
+python scripts/train_3.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --config_file configs/valid_train_config.json --checkpoint_path checkpoints/k_30 --wandb_project viscosity_cls  --wandb_run_name k_30__dropout_0.3__num_layers_1__resnet18_ddp --notes "resnet18, transformer dropout_0.3, heads_4, layers_1, k_30"

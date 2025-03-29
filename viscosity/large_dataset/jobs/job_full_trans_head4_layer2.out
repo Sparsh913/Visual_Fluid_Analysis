@@ -21,3 +21,10 @@ Epoch 15 | Train Loss: 109.0848 | Train Acc: 0.3852 | Val Loss: 110.2301 | Val A
 Epoch 16 | Train Loss: 109.0738 | Train Acc: 0.3852 | Val Loss: 110.2500 | Val Acc: 0.4379
 Epoch 17 | Train Loss: 109.0821 | Train Acc: 0.3852 | Val Loss: 110.3879 | Val Acc: 0.4379
 Epoch 18 | Train Loss: 109.0860 | Train Acc: 0.3852 | Val Loss: 110.1927 | Val Acc: 0.4379
+Epoch 19 | Train Loss: 109.0874 | Train Acc: 0.3852 | Val Loss: 110.2082 | Val Acc: 0.4379
+Epoch 20 | Train Loss: 109.0878 | Train Acc: 0.3852 | Val Loss: 110.6872 | Val Acc: 0.4379
+Epoch 21 | Train Loss: 109.0861 | Train Acc: 0.3852 | Val Loss: 110.4344 | Val Acc: 0.4379
+Epoch 22 | Train Loss: 109.0895 | Train Acc: 0.3852 | Val Loss: 110.3115 | Val Acc: 0.4379
+Epoch 23 | Train Loss: 109.0862 | Train Acc: 0.3852 | Val Loss: 110.4661 | Val Acc: 0.4379
+Epoch 24 | Train Loss: 109.0901 | Train Acc: 0.3852 | Val Loss: 110.1576 | Val Acc: 0.4379
+Training took 36812.01 seconds

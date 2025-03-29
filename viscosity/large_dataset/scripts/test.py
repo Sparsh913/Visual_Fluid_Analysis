@@ -99,6 +99,21 @@ def main_worker(args, config):
     report_df = pd.DataFrame(report).transpose()
     report_df.to_csv(os.path.join(out_dir, 'classification_report.csv'))
     
+    # Also save vialwise confusion matrix
+    vialwise_cm = defaultdict(lambda: defaultdict(int))
+    for vial_id, pred, label in zip(all_vials, preds, labels):
+        vialwise_cm[vial_id][label.item()] += 1
+    vialwise_cm_df = pd.DataFrame(vialwise_cm).T.fillna(0)
+    vialwise_cm_df.to_csv(os.path.join(out_dir, 'vialwise_confusion_matrix.csv'))
+    # Plot vialwise confusion matrix
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(vialwise_cm_df, annot=True, fmt='d', cmap='Blues')
+    plt.title('Vialwise Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.savefig(os.path.join(out_dir, 'vialwise_confusion_matrix.png'))
+    plt.close()
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fluid Viscosity Classification")
     parser.add_argument("--root_dir", type=str, required=True, help="Root directory of the dataset")

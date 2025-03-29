@@ -87,9 +87,10 @@
       "vial_27",
       "vial_29"
     ],
-    "sequence_length": 10,
+    "sequence_length": 30,
     "seed": 42,
-    "batch_size": 20,
+    "batch_size": 16,
+    "weight_decay": 1e-4,
     "lr": 1e-3,
     "epochs": 50
   }

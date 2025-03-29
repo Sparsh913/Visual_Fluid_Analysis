@@ -3,7 +3,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, DistributedSampler
 import os
 import json
 import numpy as np
@@ -22,8 +25,22 @@ import shutil
 from model.vis_cls import VisCls
 from model.dataloader import FluidViscosityDataset
 
-def main_worker(args, config, run_id):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
+
+def main_worker(rank, world_size, args, config, run_id):
+    setup(rank, world_size)
+    torch.cuda.set_device(rank)
+    device = torch.device(f"cuda:{rank}")
+    
+    is_main = rank == 0
+    if is_main:
+        wandb.init(project=args.wandb_project, name=args.wandb_run_name or run_id, config=config, notes=args.notes)
 
     # Create training dataset and extract normalization stats
     train_dataset = FluidViscosityDataset(
@@ -41,8 +58,9 @@ def main_worker(args, config, run_id):
     }
 
     # Save stats for test-time use
-    with open(os.path.join(args.checkpoint_path, run_id, 'robot_stats.json'), 'w') as f:
-        json.dump(robot_stats, f)
+    if is_main:
+        with open(os.path.join(args.checkpoint_path, run_id, 'robot_stats.json'), 'w') as f:
+            json.dump(robot_stats, f)
 
     # Validation dataset uses training stats
     val_dataset = FluidViscosityDataset(
@@ -55,11 +73,15 @@ def main_worker(args, config, run_id):
         transform=None,
         robot_mean_std=robot_stats
     )
-
-    train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=config['batch_size'] * 4, shuffle=False, num_workers=2, pin_memory=True)
+    
+    train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
+    val_sampler = DistributedSampler(val_dataset, num_replicas=world_size, rank=rank, shuffle=False)
+    global_batch_size = config['batch_size']
+    train_loader = DataLoader(train_dataset, batch_size=global_batch_size//world_size, sampler=train_sampler, num_workers=2, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=global_batch_size//world_size * 4, sampler=val_sampler, num_workers=2, pin_memory=True)
 
     model = VisCls(embed_dim=160).to(device)
+    model = DDP(model, device_ids=[rank])
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     optimizer.zero_grad()
@@ -89,6 +111,7 @@ def main_worker(args, config, run_id):
     for epoch in tqdm(range(start_epoch, start_epoch + config['epochs'])):
         torch.cuda.empty_cache()
         model.train()
+        train_sampler.set_epoch(epoch)
         train_loss = 0
         train_acc = 0
 
@@ -121,30 +144,33 @@ def main_worker(args, config, run_id):
         val_loss /= len(val_loader)
         val_acc /= len(val_loader.dataset)
 
-        wandb.log({"train_loss": train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch})
-        print(f"Epoch {epoch} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
+        if is_main:
+            wandb.log({"train_loss": train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch})
+            print(f"Epoch {epoch} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
 
-        if epoch+1 % 5 == 0:
-            checkpoint = {
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc,
-                'checkpoint_path': os.path.join(args.checkpoint_path, run_id)
-            }
-            if args.load_ckpt and os.path.exists(args.load_ckpt):
-                torch.save(checkpoint, os.path.join(ckpt_path, f"epoch_{epoch+1}.pth"))
-            else:
-                torch.save(checkpoint, os.path.join(args.checkpoint_path, run_id, f"epoch_{epoch+1}.pth"))
-            print(f"Checkpoint saved at epoch {epoch}")
-
-    end = time()
-    print(f"Training took {end - start:.2f} seconds")
-    wandb.finish()
+            if epoch+1 % 5 == 0:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'train_loss': train_loss,
+                    'train_acc': train_acc,
+                    'val_loss': val_loss,
+                    'val_acc': val_acc,
+                    'checkpoint_path': os.path.join(args.checkpoint_path, run_id)
+                }
+                if args.load_ckpt and os.path.exists(args.load_ckpt):
+                    torch.save(checkpoint, os.path.join(ckpt_path, f"epoch_{epoch+1}.pth"))
+                else:
+                    torch.save(checkpoint, os.path.join(args.checkpoint_path, run_id, f"epoch_{epoch+1}.pth"))
+                print(f"Checkpoint saved at epoch {epoch}")
+    
+    if is_main:
+        end = time()
+        print(f"Training took {end - start:.2f} seconds")
+        wandb.finish()
+    cleanup()
 
 if __name__ == "__main__":
     wandb.login()
@@ -179,4 +205,5 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    main_worker(args, config, run_id)
+    world_size = torch.cuda.device_count()
+    mp.spawn(main_worker, args=(world_size, args, config, run_id), nprocs=world_size)  # Spawn processes

@@ -20,7 +20,8 @@ class MaskTimeSeries(nn.Module):
             nn.Linear(32, embed_dim)
         )
         self.embed_dim = embed_dim
-        transformer_layer = nn.TransformerEncoderLayer(embed_dim, num_heads, dropout=0.1)
+        self.layer_norm = nn.LayerNorm(embed_dim)
+        transformer_layer = nn.TransformerEncoderLayer(embed_dim, num_heads, dropout=0.3)
         self.transformer = nn.TransformerEncoder(transformer_layer, num_layers)
 
     def forward(self, mask_seq, robot_seq, timestamps):
@@ -30,7 +31,8 @@ class MaskTimeSeries(nn.Module):
         combined_feats = torch.cat([mask_feats, robot_feats],dim=-1) # (B,T,E1+E2)
         # timestamps = timestamps - timestamps[:,[0]]  # normalized timestamps start at zero
         timestamp_feats = self.timestamp_encoder(timestamps.unsqueeze(-1)) # (B,T,embed_dim) This is the positional embedding
-        transformer_in = combined_feats + timestamp_feats  # (B,T,E1+E2+32)
+        transformer_in = self.layer_norm(combined_feats + timestamp_feats)  # (B,T,E1+E2+32)
+        # transformer_in = self.layer_norm(combined_feats)
         transformer_out = self.transformer(transformer_in.permute(1,0,2)) #(T,B,E)
         transformer_pooled = transformer_out.mean(dim=0) #(B,E)
         return transformer_pooled #combined_feats.permute(1,0,2).mean(dim=0) #
