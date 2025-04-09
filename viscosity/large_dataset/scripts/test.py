@@ -41,7 +41,9 @@ def main_worker(args, config):
         split='test',
         sequence_length=config['sequence_length'],
         mask_format='png',
-        transform=None,
+        # transform=transforms.Compose([
+        #     transforms.Resize((224, 224)),
+        # ]),
         robot_mean_std=robot_stats
     )
     
@@ -49,7 +51,7 @@ def main_worker(args, config):
     # Load model
     model = VisCls(embed_dim=160).to(device)
     model.to(device)
-    model.load_state_dict(torch.load(args.load_ckpt, map_location=device))
+    model.load_state_dict(torch.load(args.load_ckpt, map_location=device)['model_state_dict'], strict=False)
     model.eval()
     all_preds = []
     all_labels = []
@@ -64,6 +66,7 @@ def main_worker(args, config):
             all_preds.append(preds.cpu())
             all_labels.append(labels.cpu())
             all_vials.extend(vial_ids)
+            torch.cuda.empty_cache()
     preds = torch.cat(all_preds, dim=0)
     labels = torch.cat(all_labels, dim=0)
     # accuracy
@@ -100,19 +103,24 @@ def main_worker(args, config):
     report_df.to_csv(os.path.join(out_dir, 'classification_report.csv'))
     
     # Also save vialwise confusion matrix
+    # each vial will have its own confusion matrix
     vialwise_cm = defaultdict(lambda: defaultdict(int))
     for vial_id, pred, label in zip(all_vials, preds, labels):
-        vialwise_cm[vial_id][label.item()] += 1
-    vialwise_cm_df = pd.DataFrame(vialwise_cm).T.fillna(0)
-    vialwise_cm_df.to_csv(os.path.join(out_dir, 'vialwise_confusion_matrix.csv'))
-    # Plot vialwise confusion matrix
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(vialwise_cm_df, annot=True, fmt='d', cmap='Blues')
-    plt.title('Vialwise Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.savefig(os.path.join(out_dir, 'vialwise_confusion_matrix.png'))
-    plt.close()
+        vialwise_cm[vial_id][(label.item(), pred.item())] += 1
+    for vial_id, cm in vialwise_cm.items():
+        cm_dict = {(str(k[0]), str(k[1])): v for k, v in cm.items()}
+        cm_df = pd.DataFrame.from_dict(cm_dict, orient='index', columns=['count'])
+        cm_df.index = pd.MultiIndex.from_tuples(cm_df.index, names=['True', 'Predicted'])
+        cm_df = cm_df.unstack(fill_value=0)
+        cm_df.columns = cm_df.columns.droplevel(0)
+        cm_df.to_csv(os.path.join(out_dir, f'vial_{vial_id}_confusion_matrix.csv'))
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm_df, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Confusion Matrix for Vial {vial_id}')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.savefig(os.path.join(out_dir, f'vial_{vial_id}_confusion_matrix.png'))
+        plt.close()
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fluid Viscosity Classification")

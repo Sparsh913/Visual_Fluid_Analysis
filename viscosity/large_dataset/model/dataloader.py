@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import pandas as pd
 from torch.utils.data import Dataset
+from PIL import Image
 
 class FluidViscosityDataset(Dataset):
     def __init__(self, 
@@ -17,7 +18,9 @@ class FluidViscosityDataset(Dataset):
                  transform=None,
                  normalize_robot_data=True,
                  normalize_timestamps=True,
-                 robot_mean_std=None):
+                 robot_mean_std=None,
+                 deg_convert=True,
+                 ):
         """
         Args:
             root_dir: str, path to the data root containing vial directories
@@ -39,6 +42,7 @@ class FluidViscosityDataset(Dataset):
         self.normalize_robot_data = normalize_robot_data
         self.normalize_timestamps = normalize_timestamps
         self.robot_mean_std = robot_mean_std
+        self.deg_convert = deg_convert
 
         # Load vial label CSV
         df = pd.read_csv(vial_label_csv)
@@ -69,7 +73,11 @@ class FluidViscosityDataset(Dataset):
         if self.split in ['train', 'val']:
             vial_profiles = self.config[self.split]
         elif self.split == 'test':
-            vial_profiles = {vial: None for vial in self.config['test']}  # load all profiles
+            if isinstance(self.config['test'], dict):
+                vial_profiles = self.config[self.split] # load selected profiles
+            else:
+                vial_profiles = {vial: None for vial in self.config['test']}  # load all profiles
+            
         else:
             raise ValueError("split must be 'train', 'val', or 'test'")
 
@@ -120,12 +128,20 @@ class FluidViscosityDataset(Dataset):
                             speeds = parse_section("Actual Speeds")
                             accels = parse_section("Actual Accelerations")
 
-                            joint_log[idx] = {
-                                'timestamp': timestamp,
-                                'angle': angles[5],
-                                'speed': speeds[5],
-                                'accel': accels[5]
-                            }
+                            if not self.deg_convert:
+                                joint_log[idx] = {
+                                    'timestamp': timestamp,
+                                    'angle': angles[5],
+                                    'speed': speeds[5],
+                                    'accel': accels[5]
+                                }
+                            else:
+                                joint_log[idx] = {
+                                    'timestamp': timestamp,
+                                    'angle': np.rad2deg(angles[5]),
+                                    'speed': np.rad2deg(speeds[5]),
+                                    'accel': np.rad2deg(accels[5])
+                                }
 
                         except Exception as e:
                             print(f"[Error] Parsing joint log at {mp_path}: {e}")
@@ -167,22 +183,42 @@ class FluidViscosityDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.samples[idx]
-
+        
         mask_seq = []
         for path in sample['mask_paths']:
             if self.mask_format == 'png':
+                # Load the mask with OpenCV
                 mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                if mask is None:
+                    raise ValueError(f"Could not read mask image: {path}")
+                    
+                # Apply transforms if needed (assumes transforms don't include ToTensor)
+                if self.transform:
+                    mask_pil = Image.fromarray(mask)
+                    mask_pil = self.transform(mask_pil)
+                    mask = np.array(mask_pil)
+                    
+                # Convert to tensor and normalize once
                 mask = torch.tensor(mask, dtype=torch.float32) / 255.0
+                    
             elif self.mask_format == 'npy':
                 mask = np.load(path)
+                
+                # For NPY files, assume they're already in the right format
+                # but still apply transforms if needed
+                if self.transform:
+                    # Convert to PIL for transforms
+                    mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
+                    mask_pil = self.transform(mask_pil)
+                    mask = np.array(mask_pil) / 255.0
+                    
                 mask = torch.tensor(mask, dtype=torch.float32)
             else:
                 raise ValueError("Unsupported mask format.")
-            if self.transform:
-                mask = self.transform(mask)
+                
             mask_seq.append(mask.unsqueeze(0))
-
-        mask_tensor = torch.stack(mask_seq)  # (T,1,H,W)
+            
+        mask_tensor = torch.stack(mask_seq) # (T,1,H,W)
         robot_tensor = torch.tensor(
             list(zip(sample['angles'], sample['speeds'], sample['accels'])),
             dtype=torch.float32

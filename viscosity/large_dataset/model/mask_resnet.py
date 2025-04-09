@@ -15,6 +15,7 @@ class MaskResnet(nn.Module):
         self.cnn.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         # Remove the final fully connected layer
         self.cnn.fc = nn.Linear(512, embedding_dim)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, masks):  # shape: (B, C, T, H, W) # C = 1
         B, T, C, H, W = masks.shape
