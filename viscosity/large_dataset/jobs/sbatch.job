@@ -4,9 +4,9 @@
 #SBATCH -p GPU-shared
 #SBATCH --gpus=v100-32:1 #GPU specification. H100
 #SBATCH -t 0-48:00 # Estimated time, 48hour max. DD-HH:MM.
-#SBATCH --job-name const_motion
-#SBATCH -o job_res18_k10_head4_layer1_dropout_0.2_sine_const_motion2.out
-#SBATCH -e job_res18_k10_head4_layer1_dropout_0.2_sine_const_motion2.err
+#SBATCH --job-name all_attn_reg
+#SBATCH -o job_res18_k10_all_motion_attn_reg_0.2.out
+#SBATCH -e job_res18_k10_all_motion_attn_reg_0.2.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sparshg@andrew.cmu.edu
 # echo commands to stdout
@@ -18,4 +18,4 @@ WORKING_DIR=/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/vis
 cd $WORKING_DIR
 export PYTHONPATH=$WORKING_DIR:$PYTHONPATH
 # sleep
-python scripts/train_2.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --config_file configs/constant_motion_train.json --checkpoint_path checkpoints/k_10 --wandb_project viscosity_cls  --wandb_run_name k_10__num_layers_1__resnet18__sinusoid_pos_emb_constant_motion --notes "resnet18, transformer dropout_0.2, heads_4, layers_1, k_10, sinusoid pos emb, no timestamps included, constant motion profile, resize transform 224x224"
+python scripts/train_2.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --config_file configs/valid_train_config.json --checkpoint_path checkpoints/k_10 --wandb_project viscosity_cls  --wandb_run_name k_10__resnet18__all_data_attn_reg_0.2 --notes "resnet18, no transformer, k_10, no timestamps included, all motion profiles, attention regularization - 0.2"

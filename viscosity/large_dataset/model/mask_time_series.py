@@ -48,17 +48,80 @@ class MaskTimeSeries(nn.Module):
         self.transformer = nn.TransformerEncoder(transformer_layer, num_layers)#, norm=self.layer_norm)
         self.pe = SinusoidalPositionalEmbedding(embed_dim)
 
-    def forward(self, mask_seq, robot_seq, timestamps):
+    # def forward(self, mask_seq, robot_seq, timestamps):
+    #     B, T, C, H, W = mask_seq.shape
+    #     mask_feats = self.mask_encoder(mask_seq) # (B,T,E1)
+    #     robot_feats = self.robot_encoder(robot_seq) # (B,T,E2)
+    #     combined_feats = torch.cat([mask_feats, robot_feats],dim=-1) # (B,T,E1+E2)
+    #     # timestamps = timestamps - timestamps[:,[0]]  # normalized timestamps start at zero
+    #     timestamp_feats = self.timestamp_encoder(timestamps.unsqueeze(-1)) # (B,T,embed_dim) This is the positional embedding
+    #     # transformer_in = combined_feats + timestamp_feats  # (B,T,E1+E2+32) # pe as timestamp embedding
+    #     transformer_in = combined_feats + self.pe(combined_feats) # (B,T,E1+E2)
+    #     # transformer_in = self.layer_norm(combined_feats)
+    #     transformer_out = self.transformer(transformer_in.permute(1,0,2)) #(T,B,E)
+    #     transformer_pooled = transformer_out.mean(dim=0) #(B,E)
+    #     return transformer_pooled #combined_feats.permute(1,0,2).mean(dim=0) #transformer_pooled
+    
+    def forward(self, mask_seq, robot_seq, timestamps, return_attn=False, apply_attn_reg=True):
         B, T, C, H, W = mask_seq.shape
-        mask_feats = self.mask_encoder(mask_seq) # (B,T,E1)
-        robot_feats = self.robot_encoder(robot_seq) # (B,T,E2)
-        combined_feats = torch.cat([mask_feats, robot_feats],dim=-1) # (B,T,E1+E2)
-        # timestamps = timestamps - timestamps[:,[0]]  # normalized timestamps start at zero
-        timestamp_feats = self.timestamp_encoder(timestamps.unsqueeze(-1)) # (B,T,embed_dim) This is the positional embedding
-        # transformer_in = combined_feats + timestamp_feats  # (B,T,E1+E2+32) # pe as timestamp embedding
-        transformer_in = combined_feats + self.pe(combined_feats) # (B,T,E1+E2)
-        # transformer_in = self.layer_norm(combined_feats)
-        transformer_out = self.transformer(transformer_in.permute(1,0,2)) #(T,B,E)
-        transformer_pooled = transformer_out.mean(dim=0) #(B,E)
-        return transformer_pooled #combined_feats.permute(1,0,2).mean(dim=0) #transformer_pooled
+        mask_feats = self.mask_encoder(mask_seq)  # (B,T,E1)
+        robot_feats = self.robot_encoder(robot_seq)  # (B,T,E2)
+        combined_feats = torch.cat([mask_feats, robot_feats], dim=-1)  # (B,T,E1+E2)
         
+        # Add positional encoding
+        transformer_in = combined_feats + self.pe(combined_feats)  # (B,T,E1+E2)
+        
+        # Transformer expects (T,B,E) format
+        transformer_in = transformer_in.permute(1, 0, 2)  # (T,B,E)
+        
+        # Get transformer output and attention weights
+        attn_penalty = 0.0
+        
+        if return_attn or apply_attn_reg:
+            # Directly access the transformer layers to get attention weights
+            transformer_out = transformer_in
+            attn_weights = []
+            
+            # Iterate through transformer layers
+            for layer in self.transformer.layers:
+                # Apply self attention
+                src2, attn_weights_layer = layer.self_attn(
+                    transformer_out, transformer_out, transformer_out,
+                    need_weights=True, average_attn_weights=False
+                )
+                
+                if apply_attn_reg:
+                    # Calculate attention concentration penalty using entropy
+                    # First apply softmax to get proper attention probabilities
+                    attn_probs = F.softmax(attn_weights_layer, dim=-1)
+                    
+                    # Calculate entropy of attention distribution (across target sequence)
+                    # Higher entropy means more distributed attention -> We want to maximize the entropy -> add negative entropy to penalty
+                    entropy = -torch.sum(attn_probs * torch.log(attn_probs + 1e-10), dim=-1)  # (B, num_heads, T) # sum(p*log(p))
+                    
+                    # We want to maximize entropy, so we minimize negative entropy
+                    # Average across batch, heads, and source positions
+                    attn_penalty += -torch.mean(entropy) # mean over all dims
+                
+                if return_attn:
+                    attn_weights.append(attn_weights_layer.detach())  # (B, num_heads, T, T)
+                
+                # Continue with the rest of the layer
+                transformer_out = transformer_out + layer.dropout1(src2)
+                transformer_out = layer.norm1(transformer_out)
+                src2 = layer.linear2(layer.dropout(layer.activation(layer.linear1(transformer_out))))
+                transformer_out = transformer_out + layer.dropout2(src2)
+                transformer_out = layer.norm2(transformer_out)
+            
+            # Mean pooling
+            transformer_pooled = transformer_out.mean(dim=0)  # (B,E)
+            
+            if return_attn:
+                return transformer_pooled, attn_weights, attn_penalty
+            else:
+                return transformer_pooled, attn_penalty
+        else:
+            # Use the regular forward pass
+            transformer_out = self.transformer(transformer_in)  # (T,B,E)
+            transformer_pooled = transformer_out.mean(dim=0)  # (B,E)
+            return transformer_pooled

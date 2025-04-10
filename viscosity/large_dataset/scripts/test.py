@@ -25,6 +25,16 @@ from time import time
 import shutil
 from model.vis_cls import VisCls
 from model.dataloader import FluidViscosityDataset
+from utils.attn_vis import visualize_attention
+
+def analyze_attention(args, model, test_dataset, num_samples=5, seq_len=10):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    base_dir = os.path.dirname(args.load_ckpt)
+    model.eval()
+    attn_dir = os.path.join(base_dir, 'attention_viz')
+    
+    # Visualize attention maps
+    visualize_attention(model, test_dataset, attn_dir, device, num_samples=num_samples, sequence_length=seq_len)
 
 def main_worker(args, config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -61,7 +71,7 @@ def main_worker(args, config):
     with torch.no_grad():
         for data in tqdm(test_loader):
             mask_seq, robot_seq, timestamps, labels, vial_ids = [data[k].to(device) if isinstance(data[k], torch.Tensor) else data[k] for k in ['masks', 'robot', 'timestamps', 'label', 'vial_id']]
-            outputs = model(mask_seq, robot_seq, timestamps)
+            outputs, _ = model(mask_seq, robot_seq, timestamps)
             _, preds = torch.max(outputs, 1)
             all_preds.append(preds.cpu())
             all_labels.append(labels.cpu())
@@ -121,6 +131,9 @@ def main_worker(args, config):
         plt.ylabel('True')
         plt.savefig(os.path.join(out_dir, f'vial_{vial_id}_confusion_matrix.png'))
         plt.close()
+    
+    # analyze attention
+    analyze_attention(args, model, train_dataset, num_samples=10, seq_len=config['sequence_length'])
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fluid Viscosity Classification")

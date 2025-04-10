@@ -1,10 +1,6 @@
 {
     "train": {
-      "vial_1": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5", 
-      "constant_pause_motion_speed_80_pause_time_0.5", 
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
       "vial_6": ["constant_motion_speed_20", "constant_motion_speed_80",
       "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
       "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
@@ -25,16 +21,7 @@
       "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
       "constant_pause_motion_speed_80_pause_time_0.5",
       "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
-      "vial_10": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
-      "vial_11": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
       
       "vial_13": ["constant_motion_speed_20", "constant_motion_speed_80",
       "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
@@ -67,28 +54,7 @@
       "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
       "constant_pause_motion_speed_80_pause_time_0.5",
       "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
-      "vial_20": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
       
-      "vial_22": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
-      "vial_23": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
-      
-      "vial_25": ["constant_motion_speed_20", "constant_motion_speed_80",
-      "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
-      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
-      "constant_pause_motion_speed_80_pause_time_0.5",
-      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
       "vial_26": ["constant_motion_speed_20", "constant_motion_speed_80",
       "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
       "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00", "constant_pause_motion_speed_20_pause_time_0.5",
@@ -113,13 +79,10 @@
       "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"]
     },
     "val": {
-      "vial_1": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
       "vial_6": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
       "vial_7": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
       "vial_8": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
-      "vial_9": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
-      "vial_10": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
-      "vial_11": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"]
+      "vial_9": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"]
     },
     "test": [
       "vial_17",
@@ -129,9 +92,8 @@
       "vial_29"
     ],
     "sequence_length": 10,
-    "attn_reg": 0.1,
     "seed": 42,
-    "batch_size": 20,
+    "batch_size": 18,
     "weight_decay": 1e-5,
     "lr": 1e-3,
     "epochs": 50

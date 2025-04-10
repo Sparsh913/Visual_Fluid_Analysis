@@ -213,8 +213,12 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
-                loss = 100 * F.cross_entropy(outputs, batch['label'])
+                outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                cls_loss = 100 * F.cross_entropy(outputs, batch['label'])
+                
+                # Add the attention regularization to the loss
+                lambda_reg = config['attn_reg']  # You can tune this hyperparameter
+                loss = cls_loss + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
@@ -256,8 +260,11 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
-                    loss = 100 * F.cross_entropy(outputs, batch['label'])
+                    outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                    cls_loss = 100 * F.cross_entropy(outputs, batch['label'])
+                    
+                    # Calculate the total loss with attention penalty
+                    loss = cls_loss + lambda_reg * attn_penalty
                     
                     # Update metrics
                     batch_size = batch['label'].size(0)
