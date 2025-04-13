@@ -20,13 +20,19 @@ from datetime import datetime as dt
 from time import time
 import shutil
 import traceback
-from model.vis_cls import VisCls
+from model.vis_model import VisModel
 from model.dataloader import FluidViscosityDataset
 from debug_dataloader import validate_and_sample_logs, validate_masks
 
 def move_batch_to_device(batch, device):
     """Helper function to move batch data to the specified device"""
-    return {k: batch[k].to(device) for k in ['masks', 'robot', 'timestamps', 'label']}
+    keys = ['masks', 'interfaces', 'robot', 'timestamps']
+    if 'label' in batch:
+        keys.append('label')
+    if 'value' in batch:
+        keys.append('value')
+        keys.append('raw_value')
+    return {k: batch[k].to(device) for k in keys}
 
 def log_gpu_memory():
     """Log GPU memory usage"""
@@ -72,6 +78,8 @@ def main_worker(args, config, run_id):
                 # ]),
                 normalize_robot_data = True,
                 normalize_timestamps = True,
+                task=args.task,
+                regression_csv='data_reg.csv' if args.task == 'regression' else None
             )
             
             if train_dataset.robot_mean is not None:
@@ -87,7 +95,45 @@ def main_worker(args, config, run_id):
                 with open(stats_path, 'w') as f:
                     json.dump(robot_stats, f)
                 print(f"Saved normalization stats to {stats_path}")
-
+                
+            # Before saving global_bounds to JSON, convert any NumPy types to native Python types
+            if hasattr(train_dataset, 'global_bounds') and train_dataset.global_bounds:
+                # Create a copy that uses Python native types
+                python_global_bounds = {}
+                for key, value in train_dataset.global_bounds.items():
+                    # Convert NumPy types to Python native types
+                    if isinstance(value, np.integer):
+                        python_global_bounds[key] = int(value)
+                    elif isinstance(value, np.floating):
+                        python_global_bounds[key] = float(value)
+                    elif isinstance(value, np.ndarray):
+                        python_global_bounds[key] = value.tolist()
+                    else:
+                        python_global_bounds[key] = value
+                        
+                # Now save with Python native types
+                global_bounds_path = os.path.join(args.checkpoint_path, run_id, 'global_bounds.json')
+                if args.load_ckpt:
+                    global_bounds_path = os.path.join(os.path.dirname(args.load_ckpt), 'global_bounds.json')
+                with open(global_bounds_path, 'w') as f:
+                    json.dump(python_global_bounds, f)
+                print(f"Saved global bounds to {global_bounds_path}")
+            else:
+                print("Warning: train_dataset does not have global_bounds attribute.")
+                
+            # If regression, also save regression normalization stats
+            if args.task == 'regression':
+                reg_stats = {
+                    'mean': train_dataset.reg_mean,
+                    'std': train_dataset.reg_std
+                }
+                reg_stats_path = os.path.join(args.checkpoint_path, run_id, 'reg_stats.json')
+                if args.load_ckpt:
+                    reg_stats_path = os.path.join(os.path.dirname(args.load_ckpt), 'reg_stats.json')
+                with open(reg_stats_path, 'w') as f:
+                    json.dump(reg_stats, f)
+                print(f"Saved regression normalization stats to {reg_stats_path}")
+                
             # Validation dataset uses training stats
             val_dataset = FluidViscosityDataset(
                 root_dir=args.root_dir,
@@ -102,6 +148,9 @@ def main_worker(args, config, run_id):
                 robot_mean_std=robot_stats,
                 normalize_robot_data=True,
                 normalize_timestamps=True,
+                task=args.task,
+                regression_csv='data_reg.csv' if args.task == 'regression' else None,
+                global_bounds = train_dataset.global_bounds
             )
         except Exception as e:
             print(f"Error loading datasets: {e}")
@@ -141,8 +190,8 @@ def main_worker(args, config, run_id):
             pin_memory=True
         )
 
-        # Create model
-        model = VisCls(embed_dim=160).to(device)
+        # Create model with appropriate task
+        model = VisModel(embed_dim=160, task=args.task).to(device)
         
         # Initialize model weights with Kaiming initialization
         for m in model.modules():
@@ -166,7 +215,8 @@ def main_worker(args, config, run_id):
         
         # Initialize training variables
         start_epoch = 0
-        best_val_acc = 0
+        best_val_acc = 0  # For classification
+        best_val_mae = float('inf')  # For regression
         ckpt_path = os.path.join(args.checkpoint_path, run_id)
         
         # Load checkpoint if provided
@@ -178,10 +228,14 @@ def main_worker(args, config, run_id):
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
                 start_epoch = checkpoint['epoch'] + 1
-                best_val_acc = checkpoint.get('best_val_acc', 0)
+                if args.task == 'classification':
+                    best_val_acc = checkpoint.get('best_val_acc', 0)
+                    print(f"Current best validation accuracy: {best_val_acc:.4f}")
+                else:
+                    best_val_mae = checkpoint.get('best_val_mae', float('inf'))
+                    print(f"Current best validation MAE: {best_val_mae:.4f}")
                 ckpt_path = checkpoint.get('checkpoint_path', ckpt_path)
                 print(f"Checkpoint loaded. Starting from epoch {start_epoch}")
-                print(f"Current best validation accuracy: {best_val_acc:.4f}")
             except Exception as e:
                 print(f"Error loading checkpoint: {e}")
                 traceback.print_exc()
@@ -193,6 +247,9 @@ def main_worker(args, config, run_id):
         start_time = time()
         epoch_times = []
 
+        # Get attention regularization strength
+        lambda_reg = config.get('attn_reg', 0.1)
+
         print("Starting training...")
         for epoch in range(start_epoch, start_epoch + config['epochs']):
             epoch_start = time()
@@ -201,7 +258,8 @@ def main_worker(args, config, run_id):
             torch.cuda.empty_cache()
             model.train()
             train_loss = 0
-            train_acc = 0
+            train_acc = 0  # for classification
+            train_mae = 0  # for regression
             train_samples = 0
             
             # Progress bar for training
@@ -213,34 +271,58 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
-                cls_loss = 100 * F.cross_entropy(outputs, batch['label'])
+                outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
+                
+                # Set task-specific loss
+                if args.task == 'classification':
+                    task_loss = F.cross_entropy(outputs, batch['label'])
+                    # Update metrics
+                    batch_size = batch['label'].size(0)
+                    train_acc += (outputs.argmax(1) == batch['label']).sum().item()
+                else:  # regression
+                    task_loss = F.mse_loss(outputs, batch['value'])
+                    # Update metrics - track MAE on raw values
+                    batch_size = batch['value'].size(0)
+                    with torch.no_grad():
+                        pred_raw = outputs * train_dataset.reg_std + train_dataset.reg_mean
+                        true_raw = batch['raw_value']
+                        train_mae += torch.abs(pred_raw - true_raw).sum().item()
+                
+                # Scale loss appropriately
+                task_loss = 100 * task_loss
                 
                 # Add the attention regularization to the loss
-                lambda_reg = config['attn_reg']  # You can tune this hyperparameter
-                loss = cls_loss + lambda_reg * attn_penalty
+                loss = task_loss# + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 
-                # Update metrics
-                batch_size = batch['label'].size(0)
+                # Update total loss
                 train_loss += loss.item() * batch_size
-                train_acc += (outputs.argmax(1) == batch['label']).sum().item()
                 train_samples += batch_size
                 
-                # Update progress bar
-                train_pbar.set_postfix({
-                    'loss': loss.item(),
-                    'acc': (outputs.argmax(1) == batch['label']).sum().item() / batch_size,
-                    'mem': log_gpu_memory()
-                })
+                # Update progress bar with appropriate metrics
+                if args.task == 'classification':
+                    train_pbar.set_postfix({
+                        'loss': loss.item(),
+                        'acc': (outputs.argmax(1) == batch['label']).sum().item() / batch_size,
+                        'mem': log_gpu_memory()
+                    })
+                else:
+                    train_pbar.set_postfix({
+                        'loss': loss.item(),
+                        'mae': torch.abs(pred_raw - true_raw).mean().item(),
+                        'mem': log_gpu_memory()
+                    })
             
             # Calculate epoch metrics
             train_loss /= train_samples
-            train_acc /= train_samples
+            if args.task == 'classification':
+                train_acc /= train_samples
+            else:
+                train_mae /= train_samples
             
             # Step the scheduler
             scheduler.step()
@@ -248,7 +330,8 @@ def main_worker(args, config, run_id):
             # Validation phase
             model.eval()
             val_loss = 0
-            val_acc = 0
+            val_acc = 0  # for classification
+            val_mae = 0  # for regression
             val_samples = 0
             
             # Progress bar for validation
@@ -260,27 +343,50 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
-                    cls_loss = 100 * F.cross_entropy(outputs, batch['label'])
+                    outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
+                    
+                    # Task-specific loss
+                    if args.task == 'classification':
+                        task_loss = F.cross_entropy(outputs, batch['label'])
+                        # Update metrics
+                        batch_size = batch['label'].size(0)
+                        val_acc += (outputs.argmax(1) == batch['label']).sum().item()
+                    else:  # regression
+                        task_loss = F.mse_loss(outputs, batch['value'])
+                        # Update metrics
+                        batch_size = batch['value'].size(0)
+                        pred_raw = outputs * val_dataset.reg_std + val_dataset.reg_mean
+                        true_raw = batch['raw_value']
+                        val_mae += torch.abs(pred_raw - true_raw).sum().item()
+                    
+                    # Scale loss
+                    task_loss = 100 * task_loss
                     
                     # Calculate the total loss with attention penalty
-                    loss = cls_loss + lambda_reg * attn_penalty
+                    loss = task_loss# + lambda_reg * attn_penalty
                     
-                    # Update metrics
-                    batch_size = batch['label'].size(0)
+                    # Update total loss
                     val_loss += loss.item() * batch_size
-                    val_acc += (outputs.argmax(1) == batch['label']).sum().item()
                     val_samples += batch_size
                     
                     # Update progress bar
-                    val_pbar.set_postfix({
-                        'loss': loss.item(),
-                        'acc': (outputs.argmax(1) == batch['label']).sum().item() / batch_size
-                    })
+                    if args.task == 'classification':
+                        val_pbar.set_postfix({
+                            'loss': loss.item(),
+                            'acc': (outputs.argmax(1) == batch['label']).sum().item() / batch_size
+                        })
+                    else:
+                        val_pbar.set_postfix({
+                            'loss': loss.item(),
+                            'mae': torch.abs(pred_raw - true_raw).mean().item()
+                        })
             
             # Calculate validation metrics
             val_loss /= val_samples
-            val_acc /= val_samples
+            if args.task == 'classification':
+                val_acc /= val_samples
+            else:
+                val_mae /= val_samples
             
             # Calculate epoch time
             epoch_end = time()
@@ -288,30 +394,55 @@ def main_worker(args, config, run_id):
             epoch_times.append(epoch_time)
             
             # Check for best model
-            is_best = val_acc > best_val_acc
-            if is_best:
-                best_val_acc = val_acc
+            if args.task == 'classification':
+                is_best = val_acc > best_val_acc
+                if is_best:
+                    best_val_acc = val_acc
+            else:  # regression
+                is_best = val_mae < best_val_mae
+                if is_best:
+                    best_val_mae = val_mae
             
             # Log metrics
             metrics = {
                 "train_loss": train_loss,
-                "train_acc": train_acc,
                 "val_loss": val_loss,
-                "val_acc": val_acc,
                 "epoch": epoch,
                 "epoch_time": epoch_time,
                 "learning_rate": scheduler.get_last_lr()[0],
-                "best_val_acc": best_val_acc
             }
+            
+            # Add task-specific metrics
+            if args.task == 'classification':
+                metrics.update({
+                    "train_acc": train_acc,
+                    "val_acc": val_acc,
+                    "best_val_acc": best_val_acc
+                })
+            else:
+                metrics.update({
+                    "train_mae": train_mae,
+                    "val_mae": val_mae,
+                    "best_val_mae": best_val_mae
+                })
+                
             wandb.log(metrics)
             
             # Print epoch summary
-            print(f"Epoch {epoch+1} | "
-                  f"Train Loss: {train_loss:.4f} | "
-                  f"Train Acc: {train_acc:.4f} | "
-                  f"Val Loss: {val_loss:.4f} | "
-                  f"Val Acc: {val_acc:.4f} | "
-                  f"Time: {epoch_time:.2f}s")
+            if args.task == 'classification':
+                print(f"Epoch {epoch+1} | "
+                      f"Train Loss: {train_loss:.4f} | "
+                      f"Train Acc: {train_acc:.4f} | "
+                      f"Val Loss: {val_loss:.4f} | "
+                      f"Val Acc: {val_acc:.4f} | "
+                      f"Time: {epoch_time:.2f}s")
+            else:
+                print(f"Epoch {epoch+1} | "
+                      f"Train Loss: {train_loss:.4f} | "
+                      f"Train MAE: {train_mae:.4f} | "
+                      f"Val Loss: {val_loss:.4f} | "
+                      f"Val MAE: {val_mae:.4f} | "
+                      f"Time: {epoch_time:.2f}s")
             
             # Save checkpoint
             if (epoch+1) % 5 == 0 or is_best:
@@ -321,12 +452,24 @@ def main_worker(args, config, run_id):
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict(),
                     'train_loss': train_loss,
-                    'train_acc': train_acc,
                     'val_loss': val_loss,
-                    'val_acc': val_acc,
-                    'best_val_acc': best_val_acc,
-                    'checkpoint_path': ckpt_path
+                    'checkpoint_path': ckpt_path,
+                    'task': args.task
                 }
+                
+                # Add task-specific metrics
+                if args.task == 'classification':
+                    checkpoint.update({
+                        'train_acc': train_acc,
+                        'val_acc': val_acc,
+                        'best_val_acc': best_val_acc
+                    })
+                else:
+                    checkpoint.update({
+                        'train_mae': train_mae,
+                        'val_mae': val_mae,
+                        'best_val_mae': best_val_mae
+                    })
                 
                 # Save periodic checkpoint
                 if (epoch+1) % 5 == 0:
@@ -347,15 +490,26 @@ def main_worker(args, config, run_id):
         summary = {
             "total_training_time": training_time,
             "average_epoch_time": avg_epoch_time,
-            "best_val_accuracy": best_val_acc,
             "final_train_loss": train_loss,
             "final_val_loss": val_loss
         }
         
+        # Add task-specific metrics to summary
+        if args.task == 'classification':
+            summary["best_val_accuracy"] = best_val_acc
+        else:
+            summary["best_val_mae"] = best_val_mae
+        
         wandb.log(summary)
-        print(f"Training completed in {training_time:.2f} seconds")
-        print(f"Average epoch time: {avg_epoch_time:.2f} seconds")
-        print(f"Best validation accuracy: {best_val_acc:.4f}")
+        
+        if args.task == 'classification':
+            print(f"Training completed in {training_time:.2f} seconds")
+            print(f"Average epoch time: {avg_epoch_time:.2f} seconds")
+            print(f"Best validation accuracy: {best_val_acc:.4f}")
+        else:
+            print(f"Training completed in {training_time:.2f} seconds")
+            print(f"Average epoch time: {avg_epoch_time:.2f} seconds")
+            print(f"Best validation MAE: {best_val_mae:.4f}")
         
         # Finish wandb run
         wandb.finish()
@@ -367,7 +521,7 @@ def main_worker(args, config, run_id):
 
 if __name__ == "__main__":
     # Parse arguments
-    parser = argparse.ArgumentParser(description="Single GPU Training Script for Fluid Viscosity Classification")
+    parser = argparse.ArgumentParser(description="Single GPU Training Script for Fluid Viscosity Classification/Regression")
     parser.add_argument('--root_dir', type=str, default='/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data')
     parser.add_argument('--config_file', type=str, default='configs/valid_train_config.json')
     parser.add_argument('--checkpoint_path', type=str, default='checkpoints/')
@@ -375,6 +529,10 @@ if __name__ == "__main__":
     parser.add_argument('--load_ckpt', type=str, default=None, help='Path to checkpoint to resume from')
     parser.add_argument('--notes', type=str, default='', help='Notes for the run')
     parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
+    parser.add_argument('--task', type=str, default='classification', choices=['classification', 'regression'], 
+                        help='Task type: classification or regression')
+    parser.add_argument('--attn_reg', type=float, default=None, 
+                        help='Attention regularization strength')
     args = parser.parse_args()
 
     # Login to wandb
@@ -388,6 +546,9 @@ if __name__ == "__main__":
     try:
         with open(args.config_file, "r") as f:
             config = json.load(f)
+            # Add attention regularization to config if provided as argument
+            if args.attn_reg is not None:
+                config['attn_reg'] = args.attn_reg
     except Exception as e:
         print(f"Error loading config file: {e}")
         sys.exit(1)
@@ -427,6 +588,7 @@ if __name__ == "__main__":
     
     # Print training information
     print(f"Starting training run: {run_id}")
+    print(f"Task: {args.task}")
     print(f"Configuration: {json.dumps(config, indent=2)}")
     
     # Start training

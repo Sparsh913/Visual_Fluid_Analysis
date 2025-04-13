@@ -1,2 +1,2 @@
 from .dataloader import FluidViscosityDataset
-from .vis_cls import VisCls
+from .vis_model import VisModel
