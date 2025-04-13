@@ -26,7 +26,7 @@ from debug_dataloader import validate_and_sample_logs, validate_masks
 
 def move_batch_to_device(batch, device):
     """Helper function to move batch data to the specified device"""
-    keys = ['masks', 'interfaces', 'robot', 'timestamps']
+    keys = ['masks', 'robot', 'timestamps']
     if 'label' in batch:
         keys.append('label')
     if 'value' in batch:
@@ -96,31 +96,6 @@ def main_worker(args, config, run_id):
                     json.dump(robot_stats, f)
                 print(f"Saved normalization stats to {stats_path}")
                 
-            # Before saving global_bounds to JSON, convert any NumPy types to native Python types
-            if hasattr(train_dataset, 'global_bounds') and train_dataset.global_bounds:
-                # Create a copy that uses Python native types
-                python_global_bounds = {}
-                for key, value in train_dataset.global_bounds.items():
-                    # Convert NumPy types to Python native types
-                    if isinstance(value, np.integer):
-                        python_global_bounds[key] = int(value)
-                    elif isinstance(value, np.floating):
-                        python_global_bounds[key] = float(value)
-                    elif isinstance(value, np.ndarray):
-                        python_global_bounds[key] = value.tolist()
-                    else:
-                        python_global_bounds[key] = value
-                        
-                # Now save with Python native types
-                global_bounds_path = os.path.join(args.checkpoint_path, run_id, 'global_bounds.json')
-                if args.load_ckpt:
-                    global_bounds_path = os.path.join(os.path.dirname(args.load_ckpt), 'global_bounds.json')
-                with open(global_bounds_path, 'w') as f:
-                    json.dump(python_global_bounds, f)
-                print(f"Saved global bounds to {global_bounds_path}")
-            else:
-                print("Warning: train_dataset does not have global_bounds attribute.")
-                
             # If regression, also save regression normalization stats
             if args.task == 'regression':
                 reg_stats = {
@@ -133,7 +108,7 @@ def main_worker(args, config, run_id):
                 with open(reg_stats_path, 'w') as f:
                     json.dump(reg_stats, f)
                 print(f"Saved regression normalization stats to {reg_stats_path}")
-                
+
             # Validation dataset uses training stats
             val_dataset = FluidViscosityDataset(
                 root_dir=args.root_dir,
@@ -149,8 +124,7 @@ def main_worker(args, config, run_id):
                 normalize_robot_data=True,
                 normalize_timestamps=True,
                 task=args.task,
-                regression_csv='data_reg.csv' if args.task == 'regression' else None,
-                global_bounds = train_dataset.global_bounds
+                regression_csv='data_reg.csv' if args.task == 'regression' else None
             )
         except Exception as e:
             print(f"Error loading datasets: {e}")
@@ -271,7 +245,7 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
+                outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
                 
                 # Set task-specific loss
                 if args.task == 'classification':
@@ -292,7 +266,7 @@ def main_worker(args, config, run_id):
                 task_loss = 100 * task_loss
                 
                 # Add the attention regularization to the loss
-                loss = task_loss# + lambda_reg * attn_penalty
+                loss = task_loss + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
@@ -343,7 +317,7 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
+                    outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
                     
                     # Task-specific loss
                     if args.task == 'classification':
@@ -363,7 +337,7 @@ def main_worker(args, config, run_id):
                     task_loss = 100 * task_loss
                     
                     # Calculate the total loss with attention penalty
-                    loss = task_loss# + lambda_reg * attn_penalty
+                    loss = task_loss + lambda_reg * attn_penalty
                     
                     # Update total loss
                     val_loss += loss.item() * batch_size
@@ -531,7 +505,7 @@ if __name__ == "__main__":
     parser.add_argument('--wandb_run_name', type=str, default=None, help='Wandb run name')
     parser.add_argument('--task', type=str, default='classification', choices=['classification', 'regression'], 
                         help='Task type: classification or regression')
-    parser.add_argument('--attn_reg', type=float, default=None, 
+    parser.add_argument('--attn_reg', type=float, default=0.1, 
                         help='Attention regularization strength')
     args = parser.parse_args()
 

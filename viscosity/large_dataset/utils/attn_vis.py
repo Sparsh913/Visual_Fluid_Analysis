@@ -4,7 +4,7 @@ import torch
 import os
 from matplotlib.colors import LinearSegmentedColormap
 
-def visualize_attention(model, dataset, output_dir, device, num_samples=5, sequence_length=10):
+def visualize_attention(model, dataset, output_dir, device, num_samples=10, sequence_length=10):
     """
     Visualize attention maps from transformer layers with probability values
     
@@ -35,7 +35,7 @@ def visualize_attention(model, dataset, output_dir, device, num_samples=5, seque
     with torch.no_grad():
         for i, data in enumerate(loader):
             # Move data to device
-            keys = ['interfaces', 'robot', 'timestamps']
+            keys = ['masks', 'robot', 'timestamps']
             if task == 'classification':
                 keys.append('label')
             else:
@@ -46,7 +46,7 @@ def visualize_attention(model, dataset, output_dir, device, num_samples=5, seque
                      for k in keys}
             
             # Get model outputs with attention weights
-            outputs, attention_weights, _ = model(batch['interfaces'], batch['robot'], batch['timestamps'], return_attn=True)
+            outputs, attention_weights, _ = model(batch['masks'], batch['robot'], batch['timestamps'], return_attn=True)
             
             # Process prediction based on task
             if task == 'classification':

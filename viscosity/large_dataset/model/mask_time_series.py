@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from .mask_encoder import MaskEncoder
 from .mask_resnet import MaskResnet
 from .robot_encoder import RobotEncoder
-from .mask_interface_encoder import MaskInterfaceEncoder
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
@@ -37,7 +36,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
 class MaskTimeSeries(nn.Module):
     def __init__(self, embed_dim=160, num_heads=4, num_layers=1):
         super().__init__()
-        self.mask_encoder = MaskInterfaceEncoder()
+        self.mask_encoder = MaskResnet() 
         self.robot_encoder = RobotEncoder() 
         self.timestamp_encoder = nn.Sequential(
             nn.Linear(1, 32), nn.ReLU(),
@@ -63,9 +62,8 @@ class MaskTimeSeries(nn.Module):
     #     transformer_pooled = transformer_out.mean(dim=0) #(B,E)
     #     return transformer_pooled #combined_feats.permute(1,0,2).mean(dim=0) #transformer_pooled
     
-    def forward(self, mask_seq, robot_seq, timestamps, return_attn=False, apply_attn_reg=False):
-        # B, T, C, H, W = mask_seq.shape
-        B, T, _ = mask_seq.shape
+    def forward(self, mask_seq, robot_seq, timestamps, return_attn=False, apply_attn_reg=True):
+        B, T, C, H, W = mask_seq.shape
         mask_feats = self.mask_encoder(mask_seq)  # (B,T,E1)
         robot_feats = self.robot_encoder(robot_seq)  # (B,T,E2)
         combined_feats = torch.cat([mask_feats, robot_feats], dim=-1)  # (B,T,E1+E2)
