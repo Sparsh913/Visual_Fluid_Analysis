@@ -37,7 +37,7 @@ def analyze_attention(args, model, test_dataset, num_samples=5, seq_len=10):
 
 def move_batch_to_device(batch, device):
     """Helper function to move batch data to the specified device"""
-    keys = ['masks', 'robot', 'timestamps', 'vial_id']
+    keys = ['interfaces', 'robot', 'timestamps', 'vial_id']
     if 'label' in batch:
         keys.append('label')
     if 'value' in batch:
@@ -66,6 +66,15 @@ def main_worker(args, config):
                 print(f"Loaded regression stats - Mean: {reg_stats['mean']:.4f}, Std: {reg_stats['std']:.4f}")
         except FileNotFoundError:
             print("Warning: Regression stats file not found, using defaults from dataset")
+            
+    # load global bounds
+    try:
+        with open(os.path.join(base_dir, 'global_bounds.json'), 'r') as f:
+            global_bounds = json.load(f)
+            print(f"Loaded global bounds - Min: {global_bounds['y_min']:.4f}, Max: {global_bounds['y_max']:.4f}")
+    except FileNotFoundError:
+        print("Warning: Global bounds file not found, using defaults from dataset")
+        global_bounds = {'y_min': 0, 'y_max': 261}  # Default values
     
     # Create test dataset
     test_dataset = FluidViscosityDataset(
@@ -77,7 +86,8 @@ def main_worker(args, config):
         mask_format='png',
         robot_mean_std=robot_stats,
         task=task,
-        regression_csv='data_reg.csv' if task == 'regression' else None
+        regression_csv='data_reg.csv' if task == 'regression' else None,
+        global_bounds=global_bounds,
     )
     
     test_loader = DataLoader(
@@ -114,7 +124,7 @@ def evaluate_classification(model, test_loader, device, out_dir):
     with torch.no_grad():
         for data in tqdm(test_loader, desc="Evaluating classification"):
             batch = move_batch_to_device(data, device)
-            outputs, _ = model(batch['masks'], batch['robot'], batch['timestamps'])
+            outputs, *_ = model(batch['interfaces'], batch['robot'], batch['timestamps'])
             _, preds = torch.max(outputs, 1)
             all_preds.append(preds.cpu())
             all_labels.append(batch['label'].cpu())
@@ -192,16 +202,16 @@ def evaluate_regression(model, test_loader, device, out_dir, dataset):
     with torch.no_grad():
         for data in tqdm(test_loader, desc="Evaluating regression"):
             batch = move_batch_to_device(data, device)
-            outputs, _ = model(batch['masks'], batch['robot'], batch['timestamps'])
+            outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
             
             # Store normalized predictions and targets
-            all_preds.append(outputs.cpu())
-            all_values.append(batch['value'].cpu())
+            all_preds.append(outputs.cpu().unsqueeze(-1))
+            all_values.append(batch['value'].cpu().unsqueeze(-1))
             
             # Convert to raw values
             raw_preds = outputs.cpu() * dataset.reg_std + dataset.reg_mean
-            all_raw_preds.append(raw_preds)
-            all_raw_values.append(batch['raw_value'].cpu())
+            all_raw_preds.append(raw_preds.unsqueeze(-1))
+            all_raw_values.append(batch['raw_value'].cpu().unsqueeze(-1))
             
             all_vials.extend(batch['vial_id'])
             torch.cuda.empty_cache()
@@ -209,8 +219,10 @@ def evaluate_regression(model, test_loader, device, out_dir, dataset):
     # Concatenate results
     preds = torch.cat(all_preds, dim=0).numpy()
     values = torch.cat(all_values, dim=0).numpy()
+    assert len(all_raw_preds) == len(all_raw_values), f"Mismatched batch count: {len(all_raw_preds)} vs {len(all_raw_values)}"
     raw_preds = torch.cat(all_raw_preds, dim=0).numpy()
     raw_values = torch.cat(all_raw_values, dim=0).numpy()
+    print(f"Raw Predictions Shape: {raw_preds.shape}, Raw Values Shape: {raw_values.shape}")
     
     # Calculate metrics on raw values
     mae = mean_absolute_error(raw_values, raw_preds)
@@ -273,15 +285,17 @@ def evaluate_regression(model, test_loader, device, out_dir, dataset):
     plt.grid(True)
     plt.savefig(os.path.join(out_dir, 'pred_vs_actual.png'))
     plt.close()
+    print(f"Saved Predicted vs Actual plot to {os.path.join(out_dir, 'pred_vs_actual.png')}")
     
     # Save raw predictions
     results_df = pd.DataFrame({
         'vial_id': all_vials,
-        'true_value': raw_values,
-        'predicted_value': raw_preds,
-        'error': raw_values - raw_preds
+        'true_value': raw_values.squeeze(-1),
+        'predicted_value': raw_preds.squeeze,
+        'error': (raw_values - raw_preds).squeeze(-1)
     })
     results_df.to_csv(os.path.join(out_dir, 'regression_predictions.csv'), index=False)
+    print(f"Saved regression predictions to {os.path.join(out_dir, 'regression_predictions.csv')}")
     
     # Plot error distribution
     plt.figure(figsize=(10, 6))
@@ -294,6 +308,7 @@ def evaluate_regression(model, test_loader, device, out_dir, dataset):
     plt.grid(True)
     plt.savefig(os.path.join(out_dir, 'error_distribution.png'))
     plt.close()
+    print(f"Saved error distribution plot to {os.path.join(out_dir, 'error_distribution.png')}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fluid Viscosity Classification/Regression Test")
