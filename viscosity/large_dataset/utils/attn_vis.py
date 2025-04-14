@@ -46,7 +46,7 @@ def visualize_attention(model, dataset, output_dir, device, num_samples=10, sequ
                      for k in keys}
             
             # Get model outputs with attention weights
-            outputs, attention_weights, _ = model(batch['masks'], batch['robot'], batch['timestamps'], return_attn=True)
+            outputs, attention_weights= model(batch['masks'], batch['robot'], batch['timestamps'], return_attn=True)
             
             # Process prediction based on task
             if task == 'classification':
