@@ -129,11 +129,13 @@
       "vial_29"
     ],
     "sequence_length": 10,
+    "embedding_dim": 260,
+    "interface_points": 135,
     "attn_reg": 0.1,
     "seed": 42,
     "batch_size": 80,
     "weight_decay": 1e-5,
     "lr": 1e-3,
-    "epochs": 50
+    "epochs": 150
   }
   

@@ -79,7 +79,8 @@ def main_worker(args, config, run_id):
                 normalize_robot_data = True,
                 normalize_timestamps = True,
                 task=args.task,
-                regression_csv='data_reg.csv' if args.task == 'regression' else None
+                regression_csv='data_reg.csv' if args.task == 'regression' else None,
+                num_interface_points = config['interface_points'],
             )
             
             if train_dataset.robot_mean is not None:
@@ -150,7 +151,8 @@ def main_worker(args, config, run_id):
                 normalize_timestamps=True,
                 task=args.task,
                 regression_csv='data_reg.csv' if args.task == 'regression' else None,
-                global_bounds = train_dataset.global_bounds
+                global_bounds = train_dataset.global_bounds,
+                num_interface_points = config['interface_points']
             )
         except Exception as e:
             print(f"Error loading datasets: {e}")
@@ -191,7 +193,11 @@ def main_worker(args, config, run_id):
         )
 
         # Create model with appropriate task
-        model = VisModel(embed_dim=160, task=args.task).to(device)
+        model = VisModel(
+            embed_dim=config['embedding_dim'], 
+            task=args.task, 
+            num_points=config["interface_points"]
+        ).to(device)
         
         # Initialize model weights with Kaiming initialization
         for m in model.modules():
@@ -209,7 +215,7 @@ def main_worker(args, config, run_id):
         
         scheduler = optim.lr_scheduler.StepLR(
             optimizer, 
-            step_size=30, 
+            step_size=20, 
             gamma=0.1
         )
         

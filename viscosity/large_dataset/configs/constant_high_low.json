@@ -52,10 +52,11 @@
       "constant_motion_speed_120", "constant_motion_speed_160"]
     },
     "sequence_length": 10,
+    "attn_reg": 0.1,
     "seed": 42,
-    "batch_size": 18,
+    "batch_size": 80,
     "weight_decay": 1e-5,
     "lr": 1e-3,
-    "epochs": 50
+    "epochs": 70
   }
   

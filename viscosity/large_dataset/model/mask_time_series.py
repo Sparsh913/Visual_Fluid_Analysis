@@ -35,10 +35,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
     
 
 class MaskTimeSeries(nn.Module):
-    def __init__(self, embed_dim=160, num_heads=4, num_layers=1):
+    def __init__(self, embed_dim=160, num_heads=4, num_layers=1, num_points=64):
         super().__init__()
-        self.mask_encoder = MaskInterfaceEncoder()
-        self.robot_encoder = RobotEncoder() 
+        self.mask_encoder = MaskInterfaceEncoder(embedding_dim=int(0.8*embed_dim), num_points=num_points)
+        self.robot_encoder = RobotEncoder(embedding_dim=embed_dim-int(0.8*embed_dim)) 
         self.timestamp_encoder = nn.Sequential(
             nn.Linear(1, 32), nn.ReLU(),
             nn.Linear(32, embed_dim)

@@ -16,9 +16,9 @@ from .mask_time_series import MaskTimeSeries
 
 
 class VisModel(nn.Module):
-    def __init__(self, embed_dim=160, num_classes=3, task='classification'):
+    def __init__(self, embed_dim=160, num_classes=3, task='classification', num_points=64):
         super().__init__()
-        self.transformer = MaskTimeSeries(embed_dim)
+        self.transformer = MaskTimeSeries(embed_dim, num_points=num_points)
         self.task = task
         if task == 'classification':
             self.out_layer = nn.Sequential(

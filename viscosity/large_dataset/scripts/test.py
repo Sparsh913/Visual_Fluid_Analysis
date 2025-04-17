@@ -88,6 +88,7 @@ def main_worker(args, config):
         task=task,
         regression_csv='data_reg.csv' if task == 'regression' else None,
         global_bounds=global_bounds,
+        num_interface_points = config['interface_points']
     )
     
     test_loader = DataLoader(
@@ -99,7 +100,7 @@ def main_worker(args, config):
     )
     
     # Load model
-    model = VisModel(embed_dim=160, task=task).to(device)
+    model = VisModel(embed_dim=config["embedding_dim"], task=task, num_points=config["interface_points"]).to(device)
     model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
     
@@ -124,7 +125,7 @@ def evaluate_classification(model, test_loader, device, out_dir):
     with torch.no_grad():
         for data in tqdm(test_loader, desc="Evaluating classification"):
             batch = move_batch_to_device(data, device)
-            outputs, *_ = model(batch['interfaces'], batch['robot'], batch['timestamps'])
+            outputs = model(batch['interfaces'], batch['robot'], batch['timestamps'])
             _, preds = torch.max(outputs, 1)
             all_preds.append(preds.cpu())
             all_labels.append(batch['label'].cpu())
