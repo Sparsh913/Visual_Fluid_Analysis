@@ -36,7 +36,7 @@ def analyze_attention(args, model, test_dataset, num_samples=5, seq_len=10):
     visualize_attention(model, test_dataset, attn_dir, device, num_samples=num_samples, sequence_length=seq_len)
 
 def move_batch_to_device(batch, device):
-    """Helper function to move batch data to the specified device"""
+    # Helper function to move batch data to the specified device
     keys = ['masks', 'robot', 'timestamps', 'vial_id']
     if 'label' in batch:
         keys.append('label')
