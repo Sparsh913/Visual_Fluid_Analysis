@@ -70,11 +70,13 @@
       "vial_29": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
       "sinusoidal_motion_freq_.33", "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"]
     },
-    "sequence_length": 10,
+    "sequence_length": 20,
+    "embedding_dim": 260,
+    "interface_points": 135,
     "seed": 42,
-    "batch_size": 18,
-    "weight_decay": 1e-5,
+    "batch_size": 40,
+    "weight_decay": 1e-4,
     "lr": 1e-3,
-    "epochs": 50
+    "epochs": 70
   }
   

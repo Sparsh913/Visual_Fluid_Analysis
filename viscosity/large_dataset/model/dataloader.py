@@ -23,7 +23,8 @@ class FluidViscosityDataset(Dataset):
                  task='classification',  # 'classification' or 'regression'
                  regression_csv=None,    # path to regression values CSV
                  global_bounds=None,     # pre-computed global boundaries
-                 num_interface_points=64 # number of points to sample along interface
+                 num_interface_points=64, # number of points to sample along interface
+                 reg_mean_std=None,  # mean/std for regression normalization
                  ):
         """
         Args:
@@ -56,6 +57,7 @@ class FluidViscosityDataset(Dataset):
         self.config_json = config_json
         self.num_interface_points = num_interface_points
         self.global_bounds = global_bounds
+        self.reg_mean_std = reg_mean_std 
         
         # Load vial label CSV for classification
         df_cls = pd.read_csv(vial_label_csv)
@@ -68,11 +70,21 @@ class FluidViscosityDataset(Dataset):
             df_reg = pd.read_csv(regression_csv)
             self.vial_to_value = {row['vial_id']: row['value'] for _, row in df_reg.iterrows()}
             
-            # Calculate regression statistics for normalization
-            reg_values = np.array(list(self.vial_to_value.values()))
-            self.reg_mean = float(np.mean(reg_values))
-            self.reg_std = float(np.std(reg_values)) + 1e-6
-            print(f"Regression value statistics - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+            if split == 'train' and reg_mean_std is None:
+                # Calculate regression statistics for normalization
+                reg_values = np.array(list(self.vial_to_value.values()))
+                self.reg_mean = float(np.mean(reg_values))
+                self.reg_std = float(np.std(reg_values)) + 1e-6
+                print(f"Regression value statistics - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+                
+            elif reg_mean_std is not None:
+                # Use provided normalization parameters for val/test
+                self.reg_mean = reg_mean_std['mean']
+                self.reg_std = reg_mean_std['std']
+                print(f"Using provided regression stats - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+            else:
+                # This case should not occur if the code is used correctly
+                raise ValueError("Regression statistics (mean/std) must be provided for validation and test splits")
 
         # Load config JSON
         with open(config_json, 'r') as f:
@@ -117,8 +129,17 @@ class FluidViscosityDataset(Dataset):
         all_x_coords = []
         
         # Process all vials and profiles
-        vial_profiles = self.config[self.split] if self.split in ['train', 'val'] else \
-                        {vial: None for vial in self.config['test']} if self.split == 'test' else {}
+        # vial_profiles = self.config[self.split] if self.split in ['train', 'val'] else \
+        #                 {vial: None for vial in self.config['test']} if self.split == 'test' else {}
+        if self.split in ['train', 'val']:
+            vial_profiles = self.config[self.split]
+        elif self.split == 'test':
+            if isinstance(self.config['test'], dict):
+                vial_profiles = self.config[self.split]
+            else:
+                vial_profiles = {vial: None for vial in self.config['test']}
+        else:
+            raise ValueError("split must be 'train', 'val', or 'test'")
                         
         for vial_id, profile_list in vial_profiles.items():
             vial_path = os.path.join(self.root_dir, vial_id)
@@ -264,21 +285,21 @@ class FluidViscosityDataset(Dataset):
 
                             angles = parse_section("Actual Angles")
                             speeds = parse_section("Actual Speeds")
-                            accels = parse_section("Actual Accelerations")
+                            # accels = parse_section("Actual Accelerations")
 
                             if not self.deg_convert:
                                 joint_log[idx] = {
                                     'timestamp': timestamp,
                                     'angle': angles[5],
                                     'speed': speeds[5],
-                                    'accel': accels[5]
+                                    # 'accel': accels[5]
                                 }
                             else:
                                 joint_log[idx] = {
                                     'timestamp': timestamp,
                                     'angle': np.rad2deg(angles[5]),
                                     'speed': np.rad2deg(speeds[5]),
-                                    'accel': np.rad2deg(accels[5])
+                                    # 'accel': np.rad2deg(accels[5])
                                 }
 
                         except Exception as e:
@@ -291,7 +312,7 @@ class FluidViscosityDataset(Dataset):
                     timestamps = [joint_log[idx]['timestamp'] for idx in ids_seq]
                     angles = [joint_log[idx]['angle'] for idx in ids_seq]
                     speeds = [joint_log[idx]['speed'] for idx in ids_seq]
-                    accels = [joint_log[idx]['accel'] for idx in ids_seq]
+                    # accels = [joint_log[idx]['accel'] for idx in ids_seq]
 
                     masks_exist = all([
                         os.path.exists(os.path.join(mask_dir, f"{idx}.{self.mask_format}")) 
@@ -302,14 +323,14 @@ class FluidViscosityDataset(Dataset):
                         continue
 
                     if self.all_robot_vals is not None:
-                        self.all_robot_vals.extend(list(zip(angles, speeds, accels)))
+                        self.all_robot_vals.extend(list(zip(angles, speeds)))#, accels)))
                     
                     # Prepare sample with appropriate label based on task
                     sample_data = {
                         'mask_paths': [os.path.join(mask_dir, f"{idx}.{self.mask_format}") for idx in ids_seq],
                         'angles': angles,
                         'speeds': speeds,
-                        'accels': accels,
+                        # 'accels': accels,
                         'timestamps': timestamps,
                         'vial_id': vial_id,
                     }
@@ -411,7 +432,7 @@ class FluidViscosityDataset(Dataset):
         interface_tensor = torch.stack(interface_seq)  # (T,num_points)
         
         robot_tensor = torch.tensor(
-            list(zip(sample['angles'], sample['speeds'], sample['accels'])),
+            list(zip(sample['angles'], sample['speeds'])),#, sample['accels'])),
             dtype=torch.float32
         )  # (T,3)
 

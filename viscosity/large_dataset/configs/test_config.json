@@ -36,9 +36,13 @@
       "vial_04"
     ],
     "sequence_length": 10,
+    "embedding_dim": 260,
+    "interface_points": 135,
+    "attn_reg": 0.1,
     "seed": 42,
-    "batch_size": 18,
-    "lr": 0.001,
-    "epochs": 100
+    "batch_size": 20,
+    "weight_decay": 1e-4,
+    "lr": 1e-3,
+    "epochs": 150
   }
   

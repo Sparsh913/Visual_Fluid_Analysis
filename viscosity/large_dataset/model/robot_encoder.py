@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class RobotEncoder(nn.Module):
-    def __init__(self, input_dim=3, embedding_dim=32):  # [pos, vel, acc] per timestep
+    def __init__(self, input_dim=2, embedding_dim=32):  # [pos, vel, acc] per timestep
         super().__init__()
         self.fc = nn.Sequential(
             nn.Linear(input_dim, 64), 

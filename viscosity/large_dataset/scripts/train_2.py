@@ -152,7 +152,8 @@ def main_worker(args, config, run_id):
                 task=args.task,
                 regression_csv='data_reg.csv' if args.task == 'regression' else None,
                 global_bounds = train_dataset.global_bounds,
-                num_interface_points = config['interface_points']
+                num_interface_points = config['interface_points'],
+                reg_mean_std = reg_stats if args.task == 'regression' else None
             )
         except Exception as e:
             print(f"Error loading datasets: {e}")
@@ -213,10 +214,16 @@ def main_worker(args, config, run_id):
             weight_decay=config['weight_decay']
         )
         
-        scheduler = optim.lr_scheduler.StepLR(
+        # scheduler = optim.lr_scheduler.StepLR(
+        #     optimizer, 
+        #     step_size=20, 
+        #     gamma=0.1
+        # )
+        
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
-            step_size=20, 
-            gamma=0.1
+            T_max=config['epochs'], 
+            eta_min=1e-6
         )
         
         # Initialize training variables
