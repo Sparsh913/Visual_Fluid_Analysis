@@ -74,7 +74,7 @@
     "embedding_dim": 260,
     "interface_points": 135,
     "seed": 42,
-    "batch_size": 40,
+    "batch_size": 20,
     "weight_decay": 1e-4,
     "lr": 1e-3,
     "epochs": 70

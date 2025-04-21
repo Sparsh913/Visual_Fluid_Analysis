@@ -39,7 +39,11 @@ def log_gpu_memory():
     if torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated() / (1024 * 1024)
         reserved = torch.cuda.memory_reserved() / (1024 * 1024)
-        return f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved"
+        # log cpu memory usage
+        cpu_allocated = torch.cuda.memory_allocated(device='cpu') / (1024 * 1024)
+        cpu_reserved = torch.cuda.memory_reserved(device='cpu') / (1024 * 1024)
+        return f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved | " \
+               f"CPU Memory: {cpu_allocated:.1f}MB allocated, {cpu_reserved:.1f}MB reserved"
     return "GPU not available"
 
 def main_worker(args, config, run_id):
