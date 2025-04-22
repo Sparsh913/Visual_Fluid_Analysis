@@ -7,12 +7,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class RobotEncoder(nn.Module):
-    def __init__(self, input_dim=3):  # [pos, vel, acc] per timestep
+    def __init__(self, input_dim=2, embed_dim=32):  # [pos, vel, acc] per timestep
         super().__init__()
         self.fc = nn.Sequential(
             nn.Linear(input_dim,64), 
             nn.ReLU(),
-            nn.Linear(64,32)
+            nn.Linear(64,embed_dim)
         )
     def forward(self, robot_seq):  # (B,T,3)
         B,T,_ = robot_seq.shape

@@ -21,6 +21,7 @@ from time import time
 import shutil
 import traceback
 from model.vis_model import VisModel
+from model.vmae import VideoMAEVisModel
 from model.dataloader import FluidViscosityDataset
 from debug_dataloader import validate_and_sample_logs, validate_masks
 
@@ -73,9 +74,9 @@ def main_worker(args, config, run_id):
                 split='train',
                 sequence_length=config['sequence_length'],
                 mask_format='png',
-                # transform= transforms.Compose([
-                #     transforms.Resize((224, 224)),
-                # ]),
+                transform= transforms.Compose([
+                    transforms.Resize((224, 224)),
+                ]),
                 normalize_robot_data = True,
                 normalize_timestamps = True,
                 task=args.task,
@@ -117,9 +118,9 @@ def main_worker(args, config, run_id):
                 split='val',
                 sequence_length=config['sequence_length'],
                 mask_format='png',
-                # transform= transforms.Compose([
-                #     transforms.Resize((224, 224)),
-                # ]),
+                transform= transforms.Compose([
+                    transforms.Resize((224, 224)),
+                ]),
                 robot_mean_std=robot_stats,
                 normalize_robot_data=True,
                 normalize_timestamps=True,
@@ -158,14 +159,19 @@ def main_worker(args, config, run_id):
         
         val_loader = DataLoader(
             val_dataset, 
-            batch_size=config['batch_size'] * 4, 
+            batch_size=config['batch_size'] * 2, 
             shuffle=False, 
             num_workers=4, 
             pin_memory=True
         )
 
         # Create model with appropriate task
-        model = VisModel(embed_dim=160, task=args.task).to(device)
+        # model = VisModel(embed_dim=160, task=args.task).to(device)
+        model = VideoMAEVisModel(task=args.task, embed_dim=config['embed_dim']).to(device)
+        # freeze the video mae model
+        for param in model.backbone.parameters():
+            param.requires_grad = False
+        trainable_params = filter(lambda p: p.requires_grad, model.parameters())
         
         # Initialize model weights with Kaiming initialization
         for m in model.modules():
@@ -176,15 +182,21 @@ def main_worker(args, config, run_id):
         
         # Set up optimizer and scheduler
         optimizer = optim.AdamW(
-            model.parameters(), 
+            # model.parameters(),
+            trainable_params, 
             lr=config['lr'], 
             weight_decay=config['weight_decay']
         )
         
-        scheduler = optim.lr_scheduler.StepLR(
+        # scheduler = optim.lr_scheduler.StepLR(
+        #     optimizer, 
+        #     step_size=30, 
+        #     gamma=0.1
+        # )
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
-            step_size=30, 
-            gamma=0.1
+            T_max=config['epochs'], 
+            eta_min=0
         )
         
         # Initialize training variables
@@ -245,7 +257,7 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
                 
                 # Set task-specific loss
                 if args.task == 'classification':
@@ -266,7 +278,7 @@ def main_worker(args, config, run_id):
                 task_loss = 100 * task_loss
                 
                 # Add the attention regularization to the loss
-                loss = task_loss + lambda_reg * attn_penalty
+                loss = task_loss# + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
@@ -317,7 +329,7 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                    outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
                     
                     # Task-specific loss
                     if args.task == 'classification':
@@ -337,7 +349,7 @@ def main_worker(args, config, run_id):
                     task_loss = 100 * task_loss
                     
                     # Calculate the total loss with attention penalty
-                    loss = task_loss + lambda_reg * attn_penalty
+                    loss = task_loss# + lambda_reg * attn_penalty
                     
                     # Update total loss
                     val_loss += loss.item() * batch_size

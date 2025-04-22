@@ -151,21 +151,21 @@ class FluidViscosityDataset(Dataset):
 
                             angles = parse_section("Actual Angles")
                             speeds = parse_section("Actual Speeds")
-                            accels = parse_section("Actual Accelerations")
+                            # accels = parse_section("Actual Accelerations")
 
                             if not self.deg_convert:
                                 joint_log[idx] = {
                                     'timestamp': timestamp,
                                     'angle': angles[5],
                                     'speed': speeds[5],
-                                    'accel': accels[5]
+                                    # 'accel': accels[5]
                                 }
                             else:
                                 joint_log[idx] = {
                                     'timestamp': timestamp,
                                     'angle': np.rad2deg(angles[5]),
                                     'speed': np.rad2deg(speeds[5]),
-                                    'accel': np.rad2deg(accels[5])
+                                    # 'accel': np.rad2deg(accels[5])
                                 }
 
                         except Exception as e:
@@ -178,7 +178,7 @@ class FluidViscosityDataset(Dataset):
                     timestamps = [joint_log[idx]['timestamp'] for idx in ids_seq]
                     angles = [joint_log[idx]['angle'] for idx in ids_seq]
                     speeds = [joint_log[idx]['speed'] for idx in ids_seq]
-                    accels = [joint_log[idx]['accel'] for idx in ids_seq]
+                    # accels = [joint_log[idx]['accel'] for idx in ids_seq]
 
                     masks_exist = all([
                         os.path.exists(os.path.join(mask_dir, f"{idx}.{self.mask_format}")) 
@@ -189,14 +189,14 @@ class FluidViscosityDataset(Dataset):
                         continue
 
                     if self.all_robot_vals is not None:
-                        self.all_robot_vals.extend(list(zip(angles, speeds, accels)))
+                        self.all_robot_vals.extend(list(zip(angles, speeds)))#, accels)))
                     
                     # Prepare sample with appropriate label based on task
                     sample_data = {
                         'mask_paths': [os.path.join(mask_dir, f"{idx}.{self.mask_format}") for idx in ids_seq],
                         'angles': angles,
                         'speeds': speeds,
-                        'accels': accels,
+                        # 'accels': accels,
                         'timestamps': timestamps,
                         'vial_id': vial_id,
                     }
@@ -253,7 +253,7 @@ class FluidViscosityDataset(Dataset):
             
         mask_tensor = torch.stack(mask_seq) # (T,1,H,W)
         robot_tensor = torch.tensor(
-            list(zip(sample['angles'], sample['speeds'], sample['accels'])),
+            list(zip(sample['angles'], sample['speeds'])),#, sample['accels'])),
             dtype=torch.float32
         )  # (T,3)
 
