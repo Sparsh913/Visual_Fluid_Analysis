@@ -130,6 +130,7 @@
     ],
     "sequence_length": 16,
     "embed_dim": 160,
+    "epoch_unfreeze": 6,
     "attn_reg": 0.1,
     "seed": 42,
     "batch_size": 80,

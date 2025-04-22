@@ -43,6 +43,46 @@ def log_gpu_memory():
         return f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved"
     return "GPU not available"
 
+def unfreeze_backbone_layers(model, num_layers_to_unfreeze=None):
+    """
+    Gradually unfreeze layers in the VideoMAE backbone.
+    If num_layers_to_unfreeze is None, unfreeze all layers.
+    """
+    # Get all backbone parameters/layers organized by module
+    backbone_layers = []
+    
+    # Access the main transformer blocks which contain most params
+    if hasattr(model.backbone, 'encoder'):
+        # Get the encoder layers (transformer blocks)
+        transformer_blocks = list(model.backbone.encoder.layer)
+        backbone_layers.extend(reversed(transformer_blocks))  # Reverse to unfreeze from last to first
+    
+    # Add embeddings module if it exists
+    if hasattr(model.backbone, 'embeddings'):
+        backbone_layers.append(model.backbone.embeddings)
+    
+    # Now unfreeze the appropriate number of layers
+    if num_layers_to_unfreeze is None:
+        # Unfreeze everything
+        for param in model.backbone.parameters():
+            param.requires_grad = True
+        print(f"Unfrozen all backbone layers")
+    else:
+        # Unfreeze specific number of layers from the end
+        layers_unfrozen = 0
+        for i, layer in enumerate(backbone_layers):
+            if layers_unfrozen >= num_layers_to_unfreeze:
+                break
+                
+            print(f"Unfreezing layer: {type(layer).__name__}")
+            for param in layer.parameters():
+                param.requires_grad = True
+            layers_unfrozen += 1
+            
+        print(f"Unfrozen {layers_unfrozen} backbone layers")
+    
+    return model
+
 def main_worker(args, config, run_id):
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -168,9 +208,12 @@ def main_worker(args, config, run_id):
         # Create model with appropriate task
         # model = VisModel(embed_dim=160, task=args.task).to(device)
         model = VideoMAEVisModel(task=args.task, embed_dim=config['embed_dim']).to(device)
-        # freeze the video mae model
+        
+        # Initially freeze the VideoMAE backbone
         for param in model.backbone.parameters():
             param.requires_grad = False
+        
+        # Get initially trainable parameters (non-frozen)
         trainable_params = filter(lambda p: p.requires_grad, model.parameters())
         
         # Initialize model weights with Kaiming initialization
@@ -182,7 +225,6 @@ def main_worker(args, config, run_id):
         
         # Set up optimizer and scheduler
         optimizer = optim.AdamW(
-            # model.parameters(),
             trainable_params, 
             lr=config['lr'], 
             weight_decay=config['weight_decay']
@@ -221,6 +263,30 @@ def main_worker(args, config, run_id):
                     best_val_mae = checkpoint.get('best_val_mae', float('inf'))
                     print(f"Current best validation MAE: {best_val_mae:.4f}")
                 ckpt_path = checkpoint.get('checkpoint_path', ckpt_path)
+                
+                # Restore batch size if available
+                if 'current_batch_size' in checkpoint:
+                    current_batch_size = checkpoint['current_batch_size']
+                    print(f"Restored batch size: {current_batch_size}")
+                    
+                    # Recreate dataloaders with restored batch size
+                    train_loader = DataLoader(
+                        train_dataset, 
+                        batch_size=current_batch_size, 
+                        shuffle=True, 
+                        num_workers=4, 
+                        pin_memory=True,
+                        drop_last=False
+                    )
+                    
+                    val_loader = DataLoader(
+                        val_dataset, 
+                        batch_size=current_batch_size * 2, 
+                        shuffle=False, 
+                        num_workers=4, 
+                        pin_memory=True
+                    )
+                
                 print(f"Checkpoint loaded. Starting from epoch {start_epoch}")
             except Exception as e:
                 print(f"Error loading checkpoint: {e}")
@@ -235,10 +301,76 @@ def main_worker(args, config, run_id):
 
         # Get attention regularization strength
         lambda_reg = config.get('attn_reg', 0.1)
+        
+        # Gradual unfreezing settings
+        unfreeze_start_epoch = 6  # Starting epoch for unfreezing (0-indexed)
+        total_layers = 12         # Typical number of transformer blocks in base models
+        unfreeze_schedule = {     # Define which layers to unfreeze at each epoch
+            unfreeze_start_epoch: 2,      # Unfreeze 2 layers at epoch 6
+            unfreeze_start_epoch + 3: 4,  # Unfreeze 4 layers at epoch 9
+            unfreeze_start_epoch + 6: 8,  # Unfreeze 8 layers at epoch 12
+            unfreeze_start_epoch + 9: None  # Unfreeze all remaining layers at epoch 15
+        }
+        
+        # Batch size reduction schedule based on unfreezing
+        # As we unfreeze more layers, we'll reduce the batch size to prevent OOM errors
+        batch_size_schedule = {
+            unfreeze_start_epoch: config['batch_size'] // 2,      # Half the batch size when initial unfreezing starts
+            unfreeze_start_epoch + 6: config['batch_size'] // 6,  # Quarter the batch size when unfreezing 8 layers
+            unfreeze_start_epoch + 9: config['batch_size'] // 10   # Further reduce when unfreezing all layers
+        }
+        
+        # Current batch size (will be adjusted during training)
+        current_batch_size = config['batch_size']
 
         print("Starting training...")
         for epoch in range(start_epoch, start_epoch + config['epochs']):
             epoch_start = time()
+            
+            # Check if we need to unfreeze layers based on the schedule
+            if epoch in unfreeze_schedule:
+                num_layers = unfreeze_schedule[epoch]
+                print(f"Epoch {epoch+1}: Unfreezing {num_layers if num_layers else 'all'} backbone layers")
+                model = unfreeze_backbone_layers(model, num_layers)
+                
+                # Update optimizer with newly unfrozen parameters
+                trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+                optimizer = optim.AdamW(
+                    trainable_params, 
+                    lr=config['lr'] * 0.1,  # Use a lower learning rate for fine-tuning
+                    weight_decay=config['weight_decay']
+                )
+                
+                # Reset scheduler with the remaining epochs
+                scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer, 
+                    T_max=start_epoch + config['epochs'] - epoch, 
+                    eta_min=0
+                )
+            
+            # Check if we need to adjust batch size based on the schedule
+            if epoch in batch_size_schedule:
+                # Update the current batch size
+                current_batch_size = batch_size_schedule[epoch]
+                print(f"Epoch {epoch+1}: Adjusting batch size to {current_batch_size}")
+                
+                # Recreate dataloaders with new batch size
+                train_loader = DataLoader(
+                    train_dataset, 
+                    batch_size=current_batch_size, 
+                    shuffle=True, 
+                    num_workers=4, 
+                    pin_memory=True,
+                    drop_last=False
+                )
+                
+                val_loader = DataLoader(
+                    val_dataset, 
+                    batch_size=current_batch_size * 2, 
+                    shuffle=False, 
+                    num_workers=4, 
+                    pin_memory=True
+                )
             
             # Training phase
             torch.cuda.empty_cache()
@@ -257,28 +389,20 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
                 
-                # Set task-specific loss
                 if args.task == 'classification':
-                    task_loss = F.cross_entropy(outputs, batch['label'])
+                    loss, outputs = model(batch['masks'], batch['robot'], batch['timestamps'], batch['label'])
                     # Update metrics
                     batch_size = batch['label'].size(0)
                     train_acc += (outputs.argmax(1) == batch['label']).sum().item()
                 else:  # regression
-                    task_loss = F.mse_loss(outputs, batch['value'])
+                    loss, outputs = model(batch['masks'], batch['robot'], batch['timestamps'], batch['value'])
                     # Update metrics - track MAE on raw values
                     batch_size = batch['value'].size(0)
                     with torch.no_grad():
                         pred_raw = outputs * train_dataset.reg_std + train_dataset.reg_mean
                         true_raw = batch['raw_value']
                         train_mae += torch.abs(pred_raw - true_raw).sum().item()
-                
-                # Scale loss appropriately
-                task_loss = 100 * task_loss
-                
-                # Add the attention regularization to the loss
-                loss = task_loss# + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
@@ -329,27 +453,18 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
-                    
-                    # Task-specific loss
                     if args.task == 'classification':
-                        task_loss = F.cross_entropy(outputs, batch['label'])
+                        loss, outputs = model(batch['masks'], batch['robot'], batch['timestamps'], batch['label'])
                         # Update metrics
                         batch_size = batch['label'].size(0)
                         val_acc += (outputs.argmax(1) == batch['label']).sum().item()
                     else:  # regression
-                        task_loss = F.mse_loss(outputs, batch['value'])
+                        loss, outputs = model(batch['masks'], batch['robot'], batch['timestamps'], batch['value'])
                         # Update metrics
                         batch_size = batch['value'].size(0)
                         pred_raw = outputs * val_dataset.reg_std + val_dataset.reg_mean
                         true_raw = batch['raw_value']
                         val_mae += torch.abs(pred_raw - true_raw).sum().item()
-                    
-                    # Scale loss
-                    task_loss = 100 * task_loss
-                    
-                    # Calculate the total loss with attention penalty
-                    loss = task_loss# + lambda_reg * attn_penalty
                     
                     # Update total loss
                     val_loss += loss.item() * batch_size
@@ -398,6 +513,11 @@ def main_worker(args, config, run_id):
                 "learning_rate": scheduler.get_last_lr()[0],
             }
             
+            # Track frozen/unfrozen status
+            frozen_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+            total_params = sum(p.numel() for p in model.parameters())
+            metrics["frozen_params_pct"] = 100 * frozen_params / total_params
+            
             # Add task-specific metrics
             if args.task == 'classification':
                 metrics.update({
@@ -421,6 +541,7 @@ def main_worker(args, config, run_id):
                       f"Train Acc: {train_acc:.4f} | "
                       f"Val Loss: {val_loss:.4f} | "
                       f"Val Acc: {val_acc:.4f} | "
+                      f"Frozen: {metrics['frozen_params_pct']:.1f}% | "
                       f"Time: {epoch_time:.2f}s")
             else:
                 print(f"Epoch {epoch+1} | "
@@ -428,6 +549,7 @@ def main_worker(args, config, run_id):
                       f"Train MAE: {train_mae:.4f} | "
                       f"Val Loss: {val_loss:.4f} | "
                       f"Val MAE: {val_mae:.4f} | "
+                      f"Frozen: {metrics['frozen_params_pct']:.1f}% | "
                       f"Time: {epoch_time:.2f}s")
             
             # Save checkpoint
@@ -440,7 +562,10 @@ def main_worker(args, config, run_id):
                     'train_loss': train_loss,
                     'val_loss': val_loss,
                     'checkpoint_path': ckpt_path,
-                    'task': args.task
+                    'task': args.task,
+                    'frozen_params_pct': metrics['frozen_params_pct'],
+                    'current_batch_size': current_batch_size,  # Save current batch size for resuming training
+                    'unfrozen_layers': unfreeze_schedule.get(epoch, 0) if epoch in unfreeze_schedule else None
                 }
                 
                 # Add task-specific metrics

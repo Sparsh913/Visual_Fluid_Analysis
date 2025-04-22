@@ -4,9 +4,9 @@
 #SBATCH -p GPU-shared
 #SBATCH --gpus=v100-32:1 #GPU specification. H100
 #SBATCH -t 0-48:00 # Estimated time, 48hour max. DD-HH:MM.
-#SBATCH --job-name lstm_all_mask_y
-#SBATCH -o job_k16_all_motion_mask_images_vmae.out
-#SBATCH -e job_k16_all_motion_mask_images_vmae.err
+#SBATCH --job-name vmae_reg
+#SBATCH -o job_k16_all_motion_mask_images_vmae_adapt.out
+#SBATCH -e job_k16_all_motion_mask_images_vmae_adapt.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sparshg@andrew.cmu.edu
 # echo commands to stdout
@@ -18,4 +18,4 @@ WORKING_DIR=/ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/vis
 cd $WORKING_DIR
 export PYTHONPATH=$WORKING_DIR:$PYTHONPATH
 # sleep
-python scripts/train_2.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --task regression --config_file configs/valid_train_config.json --checkpoint_path checkpoints/regression/k_16 --wandb_project viscosity_reg  --wandb_run_name k_10__all_data_masks_images_vmae --notes "k_10, no timestamps included, all motion profiles, masks input as images, excluding acceleration from robot tensor; lstm instead of transformer, cosine annealing scheduler, starting lr 1e-3"
+python scripts/train_2.py --root_dir /ocean/projects/agr240001p/mqureshi/sparsh/liquid_detection/sam2/viscosity/large_dataset/data --task regression --config_file configs/valid_train_config.json --checkpoint_path checkpoints/regression/k_16 --wandb_project viscosity_reg  --wandb_run_name k_16__all_data_masks_images_vmae_unfreeze_gradually --notes "k_10, no timestamps included, all motion profiles, masks input as images, excluding acceleration from robot tensor; cosine annealing scheduler, starting lr 1e-3, unfreezing vmae layers gradually"
