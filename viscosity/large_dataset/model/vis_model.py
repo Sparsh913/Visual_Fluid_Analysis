@@ -13,12 +13,14 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from .mask_time_series import MaskTimeSeries
+from .mask_lstm import MaskLSTM
 
 
 class VisModel(nn.Module):
     def __init__(self, embed_dim=160, num_classes=3, task='classification'):
         super().__init__()
         self.transformer = MaskTimeSeries(embed_dim)
+        self.lstm = MaskLSTM(embed_dim)
         self.task = task
         if task == 'classification':
             self.out_layer = nn.Sequential(

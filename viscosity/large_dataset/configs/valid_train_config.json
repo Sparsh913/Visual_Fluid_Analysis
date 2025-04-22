@@ -131,9 +131,9 @@
     "sequence_length": 10,
     "attn_reg": 0.1,
     "seed": 42,
-    "batch_size": 25,
-    "weight_decay": 1e-5,
+    "batch_size": 20,
+    "weight_decay": 1e-4,
     "lr": 1e-3,
-    "epochs": 50
+    "epochs": 70
   }
   

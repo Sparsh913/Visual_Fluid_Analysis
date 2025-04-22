@@ -181,10 +181,16 @@ def main_worker(args, config, run_id):
             weight_decay=config['weight_decay']
         )
         
-        scheduler = optim.lr_scheduler.StepLR(
+        # scheduler = optim.lr_scheduler.StepLR(
+        #     optimizer, 
+        #     step_size=30, 
+        #     gamma=0.1
+        # )
+        # cosine lr
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
-            step_size=30, 
-            gamma=0.1
+            T_max=config['epochs'], 
+            eta_min=1e-9
         )
         
         # Initialize training variables
@@ -245,7 +251,7 @@ def main_worker(args, config, run_id):
                 
                 # Forward pass
                 optimizer.zero_grad()
-                outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
                 
                 # Set task-specific loss
                 if args.task == 'classification':
@@ -266,7 +272,7 @@ def main_worker(args, config, run_id):
                 task_loss = 100 * task_loss
                 
                 # Add the attention regularization to the loss
-                loss = task_loss + lambda_reg * attn_penalty
+                loss = task_loss #+ lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
@@ -317,7 +323,7 @@ def main_worker(args, config, run_id):
                     batch = move_batch_to_device(val_data, device)
                     
                     # Forward pass
-                    outputs, attn_penalty = model(batch['masks'], batch['robot'], batch['timestamps'])
+                    outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
                     
                     # Task-specific loss
                     if args.task == 'classification':
@@ -337,7 +343,7 @@ def main_worker(args, config, run_id):
                     task_loss = 100 * task_loss
                     
                     # Calculate the total loss with attention penalty
-                    loss = task_loss + lambda_reg * attn_penalty
+                    loss = task_loss #+ lambda_reg * attn_penalty
                     
                     # Update total loss
                     val_loss += loss.item() * batch_size
