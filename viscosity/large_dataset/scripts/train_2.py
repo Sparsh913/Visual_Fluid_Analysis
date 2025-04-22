@@ -40,10 +40,10 @@ def log_gpu_memory():
         allocated = torch.cuda.memory_allocated() / (1024 * 1024)
         reserved = torch.cuda.memory_reserved() / (1024 * 1024)
         # log cpu memory usage
-        cpu_allocated = torch.cuda.memory_allocated(device='cpu') / (1024 * 1024)
-        cpu_reserved = torch.cuda.memory_reserved(device='cpu') / (1024 * 1024)
-        return f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved | " \
-               f"CPU Memory: {cpu_allocated:.1f}MB allocated, {cpu_reserved:.1f}MB reserved"
+        # cpu_allocated = torch.cuda.memory_allocated(device='cpu') / (1024 * 1024)
+        # cpu_reserved = torch.cuda.memory_reserved(device='cpu') / (1024 * 1024)
+        return f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved | "
+            #    f"CPU Memory: {cpu_allocated:.1f}MB allocated, {cpu_reserved:.1f}MB reserved"
     return "GPU not available"
 
 def main_worker(args, config, run_id):
@@ -300,20 +300,24 @@ def main_worker(args, config, run_id):
                     task_loss = F.mse_loss(outputs, batch['value'])
                     # Update metrics - track MAE on raw values
                     batch_size = batch['value'].size(0)
+                    print("batch['value']", batch["value"])
                     with torch.no_grad():
                         pred_raw = outputs * train_dataset.reg_std + train_dataset.reg_mean
                         true_raw = batch['raw_value']
                         train_mae += torch.abs(pred_raw - true_raw).sum().item()
                 
                 # Scale loss appropriately
-                task_loss = 100 * task_loss
+                task_loss = 100 * task_loss if args.task == 'classification' else task_loss
                 
                 # Add the attention regularization to the loss
                 loss = task_loss# + lambda_reg * attn_penalty
                 
                 # Backward pass
                 loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                if args.task == 'classification':
+                    nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                else:
+                    nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optimizer.step()
                 
                 # Update total loss
@@ -377,7 +381,7 @@ def main_worker(args, config, run_id):
                         val_mae += torch.abs(pred_raw - true_raw).sum().item()
                     
                     # Scale loss
-                    task_loss = 100 * task_loss
+                    task_loss = 100 * task_loss if args.task == 'classification' else task_loss
                     
                     # Calculate the total loss with attention penalty
                     loss = task_loss# + lambda_reg * attn_penalty

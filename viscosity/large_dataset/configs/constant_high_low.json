@@ -52,6 +52,8 @@
       "constant_motion_speed_120", "constant_motion_speed_160"]
     },
     "sequence_length": 10,
+    "embedding_dim": 260,
+    "interface_points": 135,
     "attn_reg": 0.1,
     "seed": 42,
     "batch_size": 80,

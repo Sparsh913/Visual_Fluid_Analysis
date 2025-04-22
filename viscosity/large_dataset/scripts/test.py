@@ -88,12 +88,13 @@ def main_worker(args, config):
         task=task,
         regression_csv='data_reg.csv' if task == 'regression' else None,
         global_bounds=global_bounds,
-        num_interface_points = config['interface_points']
+        num_interface_points = config['interface_points'],
+        reg_mean_std=reg_stats,
     )
     
     test_loader = DataLoader(
         test_dataset, 
-        batch_size=config['batch_size'] * 10, 
+        batch_size=config['batch_size'] * 4, 
         shuffle=False, 
         num_workers=2, 
         pin_memory=True
@@ -208,6 +209,7 @@ def evaluate_regression(model, test_loader, device, out_dir, dataset):
             # Store normalized predictions and targets
             all_preds.append(outputs.cpu().unsqueeze(-1))
             all_values.append(batch['value'].cpu().unsqueeze(-1))
+            # print("batch['value']", batch["value"])
             
             # Convert to raw values
             raw_preds = outputs.cpu() * dataset.reg_std + dataset.reg_mean

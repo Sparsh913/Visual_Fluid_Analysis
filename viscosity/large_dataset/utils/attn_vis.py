@@ -142,7 +142,7 @@ def visualize_attention(model, dataset, output_dir, device, num_samples=5, seque
             fig, ax = plt.subplots(figsize=(10, 5), facecolor='white')
             ax.plot(range(sequence_length), robot_data[:, 0], 'r-', label='Angle (deg)')
             ax.plot(range(sequence_length), robot_data[:, 1], 'g-', label='Speed (deg/s)')
-            ax.plot(range(sequence_length), robot_data[:, 2], 'b-', label='Accel (deg/s²)')
+            # ax.plot(range(sequence_length), robot_data[:, 2], 'b-', label='Accel (deg/s²)')
             ax.set_title(f"Robot Motion Data - {data['vial_id'][0]}")
             ax.set_xlabel("Time Step")
             ax.set_ylabel("Value")
