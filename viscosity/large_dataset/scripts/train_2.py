@@ -165,7 +165,8 @@ def main_worker(args, config, run_id):
                 normalize_robot_data=True,
                 normalize_timestamps=True,
                 task=args.task,
-                regression_csv='data_reg.csv' if args.task == 'regression' else None
+                regression_csv='data_reg.csv' if args.task == 'regression' else None,
+                reg_mean_std=reg_stats if args.task == 'regression' else None
             )
         except Exception as e:
             print(f"Error loading datasets: {e}")

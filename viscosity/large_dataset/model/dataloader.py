@@ -21,7 +21,8 @@ class FluidViscosityDataset(Dataset):
                  robot_mean_std=None,
                  deg_convert=True,
                  task='classification',  # 'classification' or 'regression'
-                 regression_csv=None     # path to regression values CSV
+                 regression_csv=None,    # path to regression values CSV
+                 reg_mean_std=None,      # mean and std for regression normalization
                  ):
         """
         Args:
@@ -61,11 +62,18 @@ class FluidViscosityDataset(Dataset):
             df_reg = pd.read_csv(regression_csv)
             self.vial_to_value = {row['vial_id']: row['value'] for _, row in df_reg.iterrows()}
             
-            # Calculate regression statistics for normalization
-            reg_values = np.array(list(self.vial_to_value.values()))
-            self.reg_mean = float(np.mean(reg_values))
-            self.reg_std = float(np.std(reg_values)) + 1e-6
-            print(f"Regression value statistics - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+            if split == 'train' and reg_mean_std is None:
+                # Calculate regression statistics for normalization
+                reg_values = np.array(list(self.vial_to_value.values()))
+                self.reg_mean = float(np.mean(reg_values))
+                self.reg_std = float(np.std(reg_values)) + 1e-6
+                print(f"Regression value statistics - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+            elif reg_mean_std is not None:
+                self.reg_mean = reg_mean_std['mean']
+                self.reg_std = reg_mean_std['std']
+                print(f"Using provided regression value statistics - Mean: {self.reg_mean:.4f}, Std: {self.reg_std:.4f}")
+            else:
+                raise ValueError("regression statistics not provided and not calculated")
 
         # Load config JSON
         with open(config_json, 'r') as f:

@@ -23,6 +23,7 @@ from datetime import datetime as dt
 from time import time
 import shutil
 from model.vis_model import VisModel
+from model.vmae import VideoMAEVisModel
 from model.dataloader import FluidViscosityDataset
 from utils.attn_vis import visualize_attention
 
@@ -77,19 +78,24 @@ def main_worker(args, config):
         mask_format='png',
         robot_mean_std=robot_stats,
         task=task,
-        regression_csv='data_reg.csv' if task == 'regression' else None
+        regression_csv='data_reg.csv' if task == 'regression' else None,
+        reg_mean_std=reg_stats if task == 'regression' else None,
+        transform= transforms.Compose([
+                    transforms.Resize((224, 224)),
+                ]),
     )
     
     test_loader = DataLoader(
         test_dataset, 
-        batch_size=config['batch_size'] * 10, 
+        batch_size=config['batch_size'] * 4, 
         shuffle=False, 
         num_workers=2, 
         pin_memory=True
     )
     
     # Load model
-    model = VisModel(embed_dim=160, task=task).to(device)
+    # model = VisModel(embed_dim=160, task=task).to(device)
+    model = VideoMAEVisModel(task=args.task, embed_dim=config['embed_dim']).to(device)
     model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
     
@@ -114,7 +120,7 @@ def evaluate_classification(model, test_loader, device, out_dir):
     with torch.no_grad():
         for data in tqdm(test_loader, desc="Evaluating classification"):
             batch = move_batch_to_device(data, device)
-            outputs, *_ = model(batch['masks'], batch['robot'], batch['timestamps'])
+            outputs = model(batch['masks'], batch['robot'], batch['timestamps'])
             _, preds = torch.max(outputs, 1)
             all_preds.append(preds.cpu())
             all_labels.append(batch['label'].cpu())
