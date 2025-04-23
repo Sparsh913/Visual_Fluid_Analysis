@@ -210,6 +210,12 @@ def main_worker(args, config, run_id):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
+                    
+        if args.task == 'regression':
+            # use xavier initialization for regression -> model.out_layer
+            nn.init.xavier_normal_(model.out_layer.weight)
+            if model.out_layer.bias is not None:
+                nn.init.constant_(model.out_layer.bias, 0)
         
         # Set up optimizer and scheduler
         optimizer = optim.AdamW(
