@@ -30,8 +30,8 @@ class VisModel(nn.Module):
             )
         else: # task == 'regression'
             self.out_layer = nn.Sequential(
-            nn.Linear(embed_dim, 32), nn.Tanh(),
-            # nn.Linear(64, 32), nn.ReLU(),
+            nn.Linear(embed_dim, 64), nn.ReLU(),
+            nn.Linear(64, 32), nn.ReLU(),
             nn.Linear(32, 1)
             )
         

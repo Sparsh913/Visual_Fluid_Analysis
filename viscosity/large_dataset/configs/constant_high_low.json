@@ -51,13 +51,13 @@
       "vial_29": ["constant_motion_speed_20", "constant_motion_speed_50", "constant_motion_speed_80",
       "constant_motion_speed_120", "constant_motion_speed_160"]
     },
-    "sequence_length": 10,
+    "sequence_length": 20,
     "embedding_dim": 260,
     "interface_points": 135,
     "attn_reg": 0.1,
     "seed": 42,
     "batch_size": 80,
-    "weight_decay": 1e-5,
+    "weight_decay": 1e-3,
     "lr": 1e-3,
     "epochs": 70
   }

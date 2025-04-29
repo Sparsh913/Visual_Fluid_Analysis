@@ -1,0 +1,78 @@
+{
+    "train": {
+      "vial_6": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_7": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_8": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_9": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
+      "vial_13": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_14": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_15": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_16": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
+      "vial_18": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_19": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
+      "vial_26": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
+      "vial_28": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      
+      "vial_30": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_31": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"]
+    },
+    "val": {
+      "vial_6": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
+      "vial_7": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
+      "vial_8": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"],
+      "vial_9": ["sinusoidal_motion_freq_.33", "constant_motion_speed_50", "constant_pause_motion_speed_50_pause_time_0.5"]
+    },
+    "test": {
+      "vial_17": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_27": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"],
+      "vial_29": ["constant_pause_motion_speed_20_pause_time_0.5",
+      "constant_pause_motion_speed_80_pause_time_0.5",
+      "constant_pause_motion_speed_120_pause_time_0.5", "constant_pause_motion_speed_160_pause_time_0.5"]
+    },
+    "sequence_length": 20,
+    "embedding_dim": 260,
+    "interface_points": 135,
+    "attn_reg": 0.1,
+    "seed": 42,
+    "batch_size": 80,
+    "weight_decay": 1e-3,
+    "lr": 1e-3,
+    "epochs": 80
+  }
+  

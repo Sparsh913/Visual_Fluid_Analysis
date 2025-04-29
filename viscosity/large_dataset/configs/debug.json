@@ -150,7 +150,7 @@
     "constant_motion_speed_120", "constant_motion_speed_160", "sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
     "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"]
   },
-  "sequence_length": 10,
+  "sequence_length": 20,
   "embedding_dim": 260,
   "interface_points": 135,
   "seed": 42,

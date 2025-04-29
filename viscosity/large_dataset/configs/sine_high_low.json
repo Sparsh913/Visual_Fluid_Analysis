@@ -1,0 +1,62 @@
+{
+    "train": {
+      "vial_6": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_7": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_8": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_9": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      
+      "vial_13": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_14": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_15": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_16": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      "vial_18": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_19": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      "vial_26": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      "vial_28": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      "vial_30": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_31": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"]
+    },
+    "val": {
+      "vial_6": ["sinusoidal_motion_freq_.33"],
+      "vial_7": ["sinusoidal_motion_freq_.33"],
+      "vial_8": ["sinusoidal_motion_freq_.33"],
+      "vial_9": ["sinusoidal_motion_freq_.33"]
+    },
+    "test": {
+      "vial_17": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.33", "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      
+      "vial_27": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.33", "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"],
+      "vial_29": ["sinusoidal_motion_freq_.20", "sinusoidal_motion_freq_.25",
+      "sinusoidal_motion_freq_.33", "sinusoidal_motion_freq_.50", "sinusoidal_motion_freq_1.00"]
+    },
+    "sequence_length": 20,
+    "embedding_dim": 260,
+    "interface_points": 135,
+    "seed": 42,
+    "batch_size": 20,
+    "weight_decay": 1e-3,
+    "lr": 1e-3,
+    "epochs": 70
+  }
+  
